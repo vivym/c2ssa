@@ -1,12 +1,16 @@
 set(LLVM_INCLUDE_DIRS
-  ${LLVM_ROOT_DIR}/llvm/include
   ${LLVM_ROOT_DIR}/clang/include
+  ${LLVM_ROOT_DIR}/llvm/include
   ${LLVM_ROOT_DIR}/build/include
   ${LLVM_ROOT_DIR}/build/tools/clang/include
+  # ${LLVM_ROOT_DIR}/build/Debug/lib/clang/12.0.0/include
+  ${LLVM_ROOT_DIR}/clang/lib
 )
 
 set(LLVM_LIBRARY_DIRS
   ${LLVM_ROOT_DIR}/build/lib
+  ${LLVM_ROOT_DIR}/build/Debug/lib
+  ${LLVM_ROOT_DIR}/build_ninja/lib
 )
 
 find_package(ZLIB)
