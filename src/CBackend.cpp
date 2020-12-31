@@ -1,4 +1,5 @@
 #include "CBackend.h"
+#include "llvm/IR/AbstractCallSite.h"
 
 using namespace llvm;
 
@@ -1387,7 +1388,7 @@ std::string CWriter::GetValueName(Value *Operand) {
       VarName += ch;
   }
 
-  return "llvm_cbe_" + VarName;
+  return "c2ssa_" + VarName;
 }
 
 /// writeInstComputationInline - Emit the computation for the specified
@@ -1412,7 +1413,7 @@ void CWriter::writeInstComputationInline(Instruction &I) {
   if (mask)
     Out << "((";
 
-  visit(I);
+  this->visit(I);
 
   if (mask)
     Out << ")&" << mask << ")";
@@ -1521,7 +1522,9 @@ void CWriter::opcodeNeedsCast(
   case Instruction::LShr:
   case Instruction::UDiv:
   case Instruction::URem: // Cast to unsigned first
-    shouldCast = true;
+    /// TODO:
+    // shouldCast = true;
+    shouldCast = false;
     castIsSigned = false;
     break;
   case Instruction::GetElementPtr:
@@ -2267,7 +2270,7 @@ void CWriter::printBasicBlock(BasicBlock *BB) {
   }
 
   // Don't emit prefix or suffix for the terminator.
-  visit(*BB->getTerminator());
+  this->visit(*BB->getTerminator());
 }
 
 // Specific Instruction type classes... note that all of the casts are
@@ -3159,7 +3162,7 @@ void CWriter::visitCallInst(CallInst &I) {
       return;
   }
 
-  Value *Callee = I.getCalledValue();
+  Value *Callee = I.getCalledOperand();
 
   PointerType *PTy = cast<PointerType>(Callee->getType());
   FunctionType *FTy = cast<FunctionType>(PTy->getElementType());
@@ -3204,7 +3207,7 @@ void CWriter::visitCallInst(CallInst &I) {
   if (NeedsCast) {
     // Ok, just cast the pointer type.
     Out << "((";
-    printTypeName(Out, I.getCalledValue()->getType()->getPointerElementType(),
+    printTypeName(Out, I.getCalledOperand()->getType()->getPointerElementType(),
                   false, std::make_pair(PAL, I.getCallingConv()));
     Out << "*)(void*)";
   }
@@ -3221,8 +3224,9 @@ void CWriter::visitCallInst(CallInst &I) {
   }
 
   unsigned NumDeclaredParams = FTy->getNumParams();
-  CallSite CS(&I);
-  CallSite::arg_iterator AI = CS.arg_begin(), AE = CS.arg_end();
+  // CallSite CS(&I);
+  // CallSite::arg_iterator AI = CS.arg_begin(), AE = CS.arg_end();
+  auto AI = I.arg_begin(), AE = I.arg_end();
   unsigned ArgNo = 0;
   if (isStructRet) { // Skip struct return argument.
     ++AI;

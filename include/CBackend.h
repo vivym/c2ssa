@@ -1,3 +1,6 @@
+#ifndef C2SSA_CBACKEND_H
+#define C2SSA_CBACKEND_H
+
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/ADT/StringRef.h"
@@ -18,6 +21,7 @@
 #include "llvm/Support/Host.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/TargetRegistry.h"
+#include "llvm/CodeGen/IntrinsicLowering.h"
 #include "IDMap.h"
 #include <set>
 
@@ -28,10 +32,10 @@ private:
   using raw_ostream = llvm::raw_ostream;
   
   raw_ostream &Out;
-  IntrinsicLowering *IL = nullptr;
+  llvm::IntrinsicLowering *IL = nullptr;
   llvm::LoopInfo *LI = nullptr;
   llvm::Function &F;
-  const DataLayout *TD = nullptr;
+  const llvm::DataLayout *TD = nullptr;
   const llvm::Instruction *CurInstr = nullptr;
 
   IDMap<const llvm::ConstantFP *> FPConstantMap;
@@ -113,7 +117,9 @@ private:
   void generateCompilerSpecificCode(raw_ostream &Out, const DataLayout *) const;
   
 public:
-  explicit CWriter(llvm::raw_ostream &Out, llvm::Function &F, llvm::LoopInfo *LI): Out(Out), F(F), LI(LI) {
+  explicit CWriter(llvm::raw_ostream &Out, llvm::Function &F,
+                   llvm::LoopInfo *LI, const llvm::DataLayout *TD):
+  Out(Out), F(F), LI(LI), TD(TD), IL(new IntrinsicLowering(*TD)) {
     memset(&UsedHeaders, 0, sizeof(UsedHeaders));
   }
   
@@ -187,8 +193,6 @@ private:
   bool writeInstructionCast(llvm::Instruction &I);
   void writeMemoryAccess(llvm::Value *Operand, llvm::Type *OperandType, bool IsVolatile,
                          unsigned Alignment);
-  
-  std::string InterpretASMConstraint(InlineAsm::ConstraintInfo &c);
 
   bool lowerIntrinsics(Function &F);
   /// Prints the definition of the intrinsic function F. Supports the
@@ -223,7 +227,7 @@ private:
   bool isInlineAsm(llvm::Instruction &I) const;
   
   // Instruction visitation functions
-  friend class InstVisitor<CWriter>;
+  friend class llvm::InstVisitor<CWriter>;
 
   void visitReturnInst(llvm::ReturnInst &I);
   void visitBranchInst(llvm::BranchInst &I);
@@ -282,3 +286,5 @@ private:
 };
 
 }
+
+#endif

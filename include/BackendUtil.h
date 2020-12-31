@@ -1,5 +1,5 @@
-#ifndef CODEGEN_BACKENDUTIL_H
-#define CODEGEN_BACKENDUTIL_H
+#ifndef C2SSA_CODEGEN_BACKENDUTIL_H
+#define C2SSA_CODEGEN_BACKENDUTIL_H
 
 #include "clang/Basic/LLVM.h"
 #include "llvm/IR/ModuleSummaryIndex.h"

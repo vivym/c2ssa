@@ -1,5 +1,5 @@
-#ifndef PRINTINGPASS_H
-#define PRINTINGPASS_H
+#ifndef C2SSA_PRINTINGPASS_H
+#define C2SSA_PRINTINGPASS_H
 
 #include "llvm/IR/PassManager.h"
 #include <string>

@@ -1,3 +1,6 @@
+#ifndef C2SSA_IDMAP_H
+#define C2SSA_IDMAP_H
+
 #include "llvm/ADT/DenseMap.h"
 
 namespace c2ssa {
@@ -36,3 +39,5 @@ public:
 };
 
 } // namespace c2ssa
+
+#endif

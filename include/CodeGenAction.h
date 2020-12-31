@@ -1,5 +1,5 @@
-#ifndef CODEGEN_CODEGENACTION_H
-#define CODEGEN_CODEGENACTION_H
+#ifndef C2SSA_CODEGEN_CODEGENACTION_H
+#define C2SSA_CODEGEN_CODEGENACTION_H
 
 #include "clang/Frontend/FrontendAction.h"
 #include <memory>

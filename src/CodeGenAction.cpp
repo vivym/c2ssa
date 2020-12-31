@@ -805,7 +805,7 @@ CodeGenAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   if (!OS)
     OS = CI.createDefaultOutputFile(false, InFile, "ssa.c");
 
-  // CI.getCodeGenOpts().OptimizationLevel = 3;
+  CI.getCodeGenOpts().OptimizationLevel = 0;
   std::unique_ptr<BackendConsumer> Result(new BackendConsumer(
       CI.getDiagnostics(), CI.getHeaderSearchOpts(),
       CI.getPreprocessorOpts(), CI.getCodeGenOpts(), CI.getTargetOpts(),
