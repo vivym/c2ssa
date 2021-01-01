@@ -49,13 +49,43 @@
 #include "llvm/Transforms/Coroutines/CoroSplit.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/IPO/AlwaysInliner.h"
+#include "llvm/Transforms/IPO/Annotation2Metadata.h"
+#include "llvm/Transforms/IPO/ArgumentPromotion.h"
+#include "llvm/Transforms/IPO/Attributor.h"
+#include "llvm/Transforms/IPO/BlockExtractor.h"
+#include "llvm/Transforms/IPO/CalledValuePropagation.h"
+#include "llvm/Transforms/IPO/ConstantMerge.h"
+#include "llvm/Transforms/IPO/CrossDSOCFI.h"
+#include "llvm/Transforms/IPO/DeadArgumentElimination.h"
+#include "llvm/Transforms/IPO/ElimAvailExtern.h"
+#include "llvm/Transforms/IPO/ForceFunctionAttrs.h"
+#include "llvm/Transforms/IPO/FunctionAttrs.h"
+#include "llvm/Transforms/IPO/FunctionImport.h"
+#include "llvm/Transforms/IPO/GlobalDCE.h"
+#include "llvm/Transforms/IPO/GlobalOpt.h"
+#include "llvm/Transforms/IPO/GlobalSplit.h"
+#include "llvm/Transforms/IPO/HotColdSplitting.h"
+#include "llvm/Transforms/IPO/InferFunctionAttrs.h"
+#include "llvm/Transforms/IPO/Inliner.h"
+#include "llvm/Transforms/IPO/Internalize.h"
+#include "llvm/Transforms/IPO/LoopExtractor.h"
 #include "llvm/Transforms/IPO/LowerTypeTests.h"
+#include "llvm/Transforms/IPO/MergeFunctions.h"
+#include "llvm/Transforms/IPO/OpenMPOpt.h"
+#include "llvm/Transforms/IPO/PartialInlining.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
-#include "llvm/Transforms/IPO/ThinLTOBitcodeWriter.h"
+#include "llvm/Transforms/IPO/SCCP.h"
+#include "llvm/Transforms/IPO/SampleProfile.h"
+#include "llvm/Transforms/IPO/SampleProfileProbe.h"
+#include "llvm/Transforms/IPO/StripDeadPrototypes.h"
+#include "llvm/Transforms/IPO/StripSymbols.h"
+#include "llvm/Transforms/IPO/SyntheticCountsPropagation.h"
+#include "llvm/Transforms/IPO/WholeProgramDevirt.h"
 #include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Instrumentation.h"
 #include "llvm/Transforms/Instrumentation/AddressSanitizer.h"
 #include "llvm/Transforms/Instrumentation/BoundsChecking.h"
+#include "llvm/Transforms/Instrumentation/CGProfile.h"
 #include "llvm/Transforms/Instrumentation/DataFlowSanitizer.h"
 #include "llvm/Transforms/Instrumentation/GCOVProfiler.h"
 #include "llvm/Transforms/Instrumentation/HWAddressSanitizer.h"
@@ -65,15 +95,106 @@
 #include "llvm/Transforms/Instrumentation/SanitizerCoverage.h"
 #include "llvm/Transforms/Instrumentation/ThreadSanitizer.h"
 #include "llvm/Transforms/ObjCARC.h"
-#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/ADCE.h"
+#include "llvm/Transforms/Scalar/AlignmentFromAssumptions.h"
+#include "llvm/Transforms/Scalar/AnnotationRemarks.h"
+#include "llvm/Transforms/Scalar/BDCE.h"
+#include "llvm/Transforms/Scalar/CallSiteSplitting.h"
+#include "llvm/Transforms/Scalar/ConstantHoisting.h"
+#include "llvm/Transforms/Scalar/ConstraintElimination.h"
+#include "llvm/Transforms/Scalar/CorrelatedValuePropagation.h"
+#include "llvm/Transforms/Scalar/DCE.h"
+#include "llvm/Transforms/Scalar/DeadStoreElimination.h"
+#include "llvm/Transforms/Scalar/DivRemPairs.h"
+#include "llvm/Transforms/Scalar/EarlyCSE.h"
+#include "llvm/Transforms/Scalar/Float2Int.h"
 #include "llvm/Transforms/Scalar/GVN.h"
+#include "llvm/Transforms/Scalar/GuardWidening.h"
+#include "llvm/Transforms/Scalar/IVUsersPrinter.h"
+#include "llvm/Transforms/Scalar/IndVarSimplify.h"
+#include "llvm/Transforms/Scalar/InductiveRangeCheckElimination.h"
+#include "llvm/Transforms/Scalar/InstSimplifyPass.h"
+#include "llvm/Transforms/Scalar/JumpThreading.h"
+#include "llvm/Transforms/Scalar/LICM.h"
+#include "llvm/Transforms/Scalar/LoopAccessAnalysisPrinter.h"
+#include "llvm/Transforms/Scalar/LoopDataPrefetch.h"
+#include "llvm/Transforms/Scalar/LoopDeletion.h"
+#include "llvm/Transforms/Scalar/LoopDistribute.h"
+#include "llvm/Transforms/Scalar/LoopFlatten.h"
+#include "llvm/Transforms/Scalar/LoopFuse.h"
+#include "llvm/Transforms/Scalar/LoopIdiomRecognize.h"
+#include "llvm/Transforms/Scalar/LoopInstSimplify.h"
+#include "llvm/Transforms/Scalar/LoopInterchange.h"
+#include "llvm/Transforms/Scalar/LoopLoadElimination.h"
+#include "llvm/Transforms/Scalar/LoopPassManager.h"
+#include "llvm/Transforms/Scalar/LoopPredication.h"
+#include "llvm/Transforms/Scalar/LoopReroll.h"
+#include "llvm/Transforms/Scalar/LoopRotation.h"
+#include "llvm/Transforms/Scalar/LoopSimplifyCFG.h"
+#include "llvm/Transforms/Scalar/LoopSink.h"
+#include "llvm/Transforms/Scalar/LoopStrengthReduce.h"
+#include "llvm/Transforms/Scalar/LoopUnrollAndJamPass.h"
+#include "llvm/Transforms/Scalar/LoopUnrollPass.h"
+#include "llvm/Transforms/Scalar/LoopVersioningLICM.h"
+#include "llvm/Transforms/Scalar/LowerAtomic.h"
+#include "llvm/Transforms/Scalar/LowerConstantIntrinsics.h"
+#include "llvm/Transforms/Scalar/LowerExpectIntrinsic.h"
+#include "llvm/Transforms/Scalar/LowerGuardIntrinsic.h"
 #include "llvm/Transforms/Scalar/LowerMatrixIntrinsics.h"
+#include "llvm/Transforms/Scalar/LowerWidenableCondition.h"
+#include "llvm/Transforms/Scalar/MakeGuardsExplicit.h"
+#include "llvm/Transforms/Scalar/MemCpyOptimizer.h"
+#include "llvm/Transforms/Scalar/MergeICmps.h"
+#include "llvm/Transforms/Scalar/MergedLoadStoreMotion.h"
+#include "llvm/Transforms/Scalar/NaryReassociate.h"
+#include "llvm/Transforms/Scalar/NewGVN.h"
+#include "llvm/Transforms/Scalar/PartiallyInlineLibCalls.h"
+#include "llvm/Transforms/Scalar/Reassociate.h"
+#include "llvm/Transforms/Scalar/Reg2Mem.h"
+#include "llvm/Transforms/Scalar/RewriteStatepointsForGC.h"
+#include "llvm/Transforms/Scalar/SCCP.h"
+#include "llvm/Transforms/Scalar/SROA.h"
+#include "llvm/Transforms/Scalar/ScalarizeMaskedMemIntrin.h"
+#include "llvm/Transforms/Scalar/Scalarizer.h"
+#include "llvm/Transforms/Scalar/SeparateConstOffsetFromGEP.h"
+#include "llvm/Transforms/Scalar/SimpleLoopUnswitch.h"
+#include "llvm/Transforms/Scalar/SimplifyCFG.h"
+#include "llvm/Transforms/Scalar/Sink.h"
+#include "llvm/Transforms/Scalar/SpeculateAroundPHIs.h"
+#include "llvm/Transforms/Scalar/SpeculativeExecution.h"
+#include "llvm/Transforms/Scalar/StraightLineStrengthReduce.h"
+#include "llvm/Transforms/Scalar/StructurizeCFG.h"
+#include "llvm/Transforms/Scalar/TailRecursionElimination.h"
+#include "llvm/Transforms/Scalar/WarnMissedTransforms.h"
 #include "llvm/Transforms/Utils.h"
+#include "llvm/Transforms/Utils/AddDiscriminators.h"
+#include "llvm/Transforms/Utils/AssumeBundleBuilder.h"
+#include "llvm/Transforms/Utils/BreakCriticalEdges.h"
 #include "llvm/Transforms/Utils/CanonicalizeAliases.h"
+#include "llvm/Transforms/Utils/CanonicalizeFreezeInLoops.h"
 #include "llvm/Transforms/Utils/EntryExitInstrumenter.h"
+#include "llvm/Transforms/Utils/FixIrreducible.h"
+#include "llvm/Transforms/Utils/InjectTLIMappings.h"
+#include "llvm/Transforms/Utils/InstructionNamer.h"
+#include "llvm/Transforms/Utils/LCSSA.h"
+#include "llvm/Transforms/Utils/LibCallsShrinkWrap.h"
+#include "llvm/Transforms/Utils/LoopSimplify.h"
+#include "llvm/Transforms/Utils/LoopVersioning.h"
+#include "llvm/Transforms/Utils/LowerInvoke.h"
+#include "llvm/Transforms/Utils/LowerSwitch.h"
+#include "llvm/Transforms/Utils/Mem2Reg.h"
+#include "llvm/Transforms/Utils/MetaRenamer.h"
 #include "llvm/Transforms/Utils/NameAnonGlobals.h"
+#include "llvm/Transforms/Utils/StripGCRelocates.h"
+#include "llvm/Transforms/Utils/StripNonLineTableDebugInfo.h"
 #include "llvm/Transforms/Utils/SymbolRewriter.h"
+#include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
+#include "llvm/Transforms/Utils/UnifyLoopExits.h"
 #include "llvm/Transforms/Utils/UniqueInternalLinkageNames.h"
+#include "llvm/Transforms/Vectorize/LoadStoreVectorizer.h"
+#include "llvm/Transforms/Vectorize/LoopVectorize.h"
+#include "llvm/Transforms/Vectorize/SLPVectorizer.h"
+#include "llvm/Transforms/Vectorize/VectorCombine.h"
 #include "PrintingPass.h"
 #include <memory>
 using namespace clang;
@@ -103,8 +224,6 @@ class EmitAssemblyHelper {
 
     return TargetIRAnalysis();
   }
-
-  void CreatePasses(legacy::PassManager &MPM, legacy::FunctionPassManager &FPM);
 
   /// Generates the TargetMachine.
   /// Leaves TM unchanged if it is unable to create the target machine.
@@ -167,31 +286,6 @@ private:
 };
 }
 
-static void addObjCARCAPElimPass(const PassManagerBuilder &Builder, PassManagerBase &PM) {
-  if (Builder.OptLevel > 0)
-    PM.add(createObjCARCAPElimPass());
-}
-
-static void addObjCARCExpandPass(const PassManagerBuilder &Builder, PassManagerBase &PM) {
-  if (Builder.OptLevel > 0)
-    PM.add(createObjCARCExpandPass());
-}
-
-static void addObjCARCOptPass(const PassManagerBuilder &Builder, PassManagerBase &PM) {
-  if (Builder.OptLevel > 0)
-    PM.add(createObjCARCOptPass());
-}
-
-static void addAddDiscriminatorsPass(const PassManagerBuilder &Builder,
-                                     legacy::PassManagerBase &PM) {
-  PM.add(createAddDiscriminatorsPass());
-}
-
-static void addBoundsCheckingPass(const PassManagerBuilder &Builder,
-                                  legacy::PassManagerBase &PM) {
-  PM.add(createBoundsCheckingLegacyPass());
-}
-
 static SanitizerCoverageOptions
 getSancovOptsFromCGOpts(const CodeGenOptions &CGOpts) {
   SanitizerCoverageOptions Opts;
@@ -246,101 +340,6 @@ static bool asanUseGlobalsGC(const Triple &T, const CodeGenOptions &CGOpts) {
     break;
   }
   return false;
-}
-
-static void addMemProfilerPasses(const PassManagerBuilder &Builder,
-                                 legacy::PassManagerBase &PM) {
-  PM.add(createMemProfilerFunctionPass());
-  PM.add(createModuleMemProfilerLegacyPassPass());
-}
-
-static void addAddressSanitizerPasses(const PassManagerBuilder &Builder,
-                                      legacy::PassManagerBase &PM) {
-  const PassManagerBuilderWrapper &BuilderWrapper =
-      static_cast<const PassManagerBuilderWrapper&>(Builder);
-  const Triple &T = BuilderWrapper.getTargetTriple();
-  const CodeGenOptions &CGOpts = BuilderWrapper.getCGOpts();
-  bool Recover = CGOpts.SanitizeRecover.has(SanitizerKind::Address);
-  bool UseAfterScope = CGOpts.SanitizeAddressUseAfterScope;
-  bool UseOdrIndicator = CGOpts.SanitizeAddressUseOdrIndicator;
-  bool UseGlobalsGC = asanUseGlobalsGC(T, CGOpts);
-  PM.add(createAddressSanitizerFunctionPass(/*CompileKernel*/ false, Recover,
-                                            UseAfterScope));
-  PM.add(createModuleAddressSanitizerLegacyPassPass(
-      /*CompileKernel*/ false, Recover, UseGlobalsGC, UseOdrIndicator));
-}
-
-static void addKernelAddressSanitizerPasses(const PassManagerBuilder &Builder,
-                                            legacy::PassManagerBase &PM) {
-  PM.add(createAddressSanitizerFunctionPass(
-      /*CompileKernel*/ true, /*Recover*/ true, /*UseAfterScope*/ false));
-  PM.add(createModuleAddressSanitizerLegacyPassPass(
-      /*CompileKernel*/ true, /*Recover*/ true, /*UseGlobalsGC*/ true,
-      /*UseOdrIndicator*/ false));
-}
-
-static void addHWAddressSanitizerPasses(const PassManagerBuilder &Builder,
-                                            legacy::PassManagerBase &PM) {
-  const PassManagerBuilderWrapper &BuilderWrapper =
-      static_cast<const PassManagerBuilderWrapper &>(Builder);
-  const CodeGenOptions &CGOpts = BuilderWrapper.getCGOpts();
-  bool Recover = CGOpts.SanitizeRecover.has(SanitizerKind::HWAddress);
-  PM.add(
-      createHWAddressSanitizerLegacyPassPass(/*CompileKernel*/ false, Recover));
-}
-
-static void addKernelHWAddressSanitizerPasses(const PassManagerBuilder &Builder,
-                                            legacy::PassManagerBase &PM) {
-  PM.add(createHWAddressSanitizerLegacyPassPass(
-      /*CompileKernel*/ true, /*Recover*/ true));
-}
-
-static void addGeneralOptsForMemorySanitizer(const PassManagerBuilder &Builder,
-                                             legacy::PassManagerBase &PM,
-                                             bool CompileKernel) {
-  const PassManagerBuilderWrapper &BuilderWrapper =
-      static_cast<const PassManagerBuilderWrapper&>(Builder);
-  const CodeGenOptions &CGOpts = BuilderWrapper.getCGOpts();
-  int TrackOrigins = CGOpts.SanitizeMemoryTrackOrigins;
-  bool Recover = CGOpts.SanitizeRecover.has(SanitizerKind::Memory);
-  PM.add(createMemorySanitizerLegacyPassPass(
-      MemorySanitizerOptions{TrackOrigins, Recover, CompileKernel}));
-
-  // MemorySanitizer inserts complex instrumentation that mostly follows
-  // the logic of the original code, but operates on "shadow" values.
-  // It can benefit from re-running some general purpose optimization passes.
-  if (Builder.OptLevel > 0) {
-    PM.add(createEarlyCSEPass());
-    PM.add(createReassociatePass());
-    PM.add(createLICMPass());
-    PM.add(createGVNPass());
-    PM.add(createInstructionCombiningPass());
-    PM.add(createDeadStoreEliminationPass());
-  }
-}
-
-static void addMemorySanitizerPass(const PassManagerBuilder &Builder,
-                                   legacy::PassManagerBase &PM) {
-  addGeneralOptsForMemorySanitizer(Builder, PM, /*CompileKernel*/ false);
-}
-
-static void addKernelMemorySanitizerPass(const PassManagerBuilder &Builder,
-                                         legacy::PassManagerBase &PM) {
-  addGeneralOptsForMemorySanitizer(Builder, PM, /*CompileKernel*/ true);
-}
-
-static void addThreadSanitizerPass(const PassManagerBuilder &Builder,
-                                   legacy::PassManagerBase &PM) {
-  PM.add(createThreadSanitizerLegacyPassPass());
-}
-
-static void addDataFlowSanitizerPass(const PassManagerBuilder &Builder,
-                                     legacy::PassManagerBase &PM) {
-  const PassManagerBuilderWrapper &BuilderWrapper =
-      static_cast<const PassManagerBuilderWrapper&>(Builder);
-  const LangOptions &LangOpts = BuilderWrapper.getLangOpts();
-  PM.add(
-      createDataFlowSanitizerLegacyPassPass(LangOpts.SanitizerBlacklistFiles));
 }
 
 static TargetLibraryInfoImpl *createTLII(llvm::Triple &TargetTriple,
@@ -582,227 +581,6 @@ getInstrProfOptions(const CodeGenOptions &CodeGenOpts,
   return Options;
 }
 
-void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
-                                      legacy::FunctionPassManager &FPM) {
-  // Handle disabling of all LLVM passes, where we want to preserve the
-  // internal module before any optimization.
-  if (CodeGenOpts.DisableLLVMPasses)
-    return;
-
-  // Figure out TargetLibraryInfo.  This needs to be added to MPM and FPM
-  // manually (and not via PMBuilder), since some passes (eg. InstrProfiling)
-  // are inserted before PMBuilder ones - they'd get the default-constructed
-  // TLI with an unknown target otherwise.
-  Triple TargetTriple(TheModule->getTargetTriple());
-  std::unique_ptr<TargetLibraryInfoImpl> TLII(
-      createTLII(TargetTriple, CodeGenOpts));
-
-  // If we reached here with a non-empty index file name, then the index file
-  // was empty and we are not performing ThinLTO backend compilation (used in
-  // testing in a distributed build environment). Drop any the type test
-  // assume sequences inserted for whole program vtables so that codegen doesn't
-  // complain.
-  if (!CodeGenOpts.ThinLTOIndexFile.empty())
-    MPM.add(createLowerTypeTestsPass(/*ExportSummary=*/nullptr,
-                                     /*ImportSummary=*/nullptr,
-                                     /*DropTypeTests=*/true));
-
-  PassManagerBuilderWrapper PMBuilder(TargetTriple, CodeGenOpts, LangOpts);
-
-  // At O0 and O1 we only run the always inliner which is more efficient. At
-  // higher optimization levels we run the normal inliner.
-  if (CodeGenOpts.OptimizationLevel <= 1) {
-    bool InsertLifetimeIntrinsics = ((CodeGenOpts.OptimizationLevel != 0 &&
-                                      !CodeGenOpts.DisableLifetimeMarkers) ||
-                                     LangOpts.Coroutines);
-    PMBuilder.Inliner = createAlwaysInlinerLegacyPass(InsertLifetimeIntrinsics);
-  } else {
-    // We do not want to inline hot callsites for SamplePGO module-summary build
-    // because profile annotation will happen again in ThinLTO backend, and we
-    // want the IR of the hot path to match the profile.
-    PMBuilder.Inliner = createFunctionInliningPass(
-        CodeGenOpts.OptimizationLevel, CodeGenOpts.OptimizeSize,
-        (!CodeGenOpts.SampleProfileFile.empty() &&
-         CodeGenOpts.PrepareForThinLTO));
-  }
-
-  PMBuilder.OptLevel = CodeGenOpts.OptimizationLevel;
-  PMBuilder.SizeLevel = CodeGenOpts.OptimizeSize;
-  PMBuilder.SLPVectorize = CodeGenOpts.VectorizeSLP;
-  PMBuilder.LoopVectorize = CodeGenOpts.VectorizeLoop;
-  // Only enable CGProfilePass when using integrated assembler, since
-  // non-integrated assemblers don't recognize .cgprofile section.
-  PMBuilder.CallGraphProfile = !CodeGenOpts.DisableIntegratedAS;
-
-  PMBuilder.DisableUnrollLoops = !CodeGenOpts.UnrollLoops;
-  // Loop interleaving in the loop vectorizer has historically been set to be
-  // enabled when loop unrolling is enabled.
-  PMBuilder.LoopsInterleaved = CodeGenOpts.UnrollLoops;
-  PMBuilder.MergeFunctions = CodeGenOpts.MergeFunctions;
-  PMBuilder.PrepareForThinLTO = CodeGenOpts.PrepareForThinLTO;
-  PMBuilder.PrepareForLTO = CodeGenOpts.PrepareForLTO;
-  PMBuilder.RerollLoops = CodeGenOpts.RerollLoops;
-
-  MPM.add(new TargetLibraryInfoWrapperPass(*TLII));
-
-  if (TM)
-    TM->adjustPassManager(PMBuilder);
-
-  if (CodeGenOpts.DebugInfoForProfiling ||
-      !CodeGenOpts.SampleProfileFile.empty())
-    PMBuilder.addExtension(PassManagerBuilder::EP_EarlyAsPossible,
-                           addAddDiscriminatorsPass);
-
-  // In ObjC ARC mode, add the main ARC optimization passes.
-  if (LangOpts.ObjCAutoRefCount) {
-    PMBuilder.addExtension(PassManagerBuilder::EP_EarlyAsPossible,
-                           addObjCARCExpandPass);
-    PMBuilder.addExtension(PassManagerBuilder::EP_ModuleOptimizerEarly,
-                           addObjCARCAPElimPass);
-    PMBuilder.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
-                           addObjCARCOptPass);
-  }
-
-  if (LangOpts.Coroutines)
-    addCoroutinePassesToExtensionPoints(PMBuilder);
-
-  if (!CodeGenOpts.MemoryProfileOutput.empty()) {
-    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
-                           addMemProfilerPasses);
-    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
-                           addMemProfilerPasses);
-  }
-
-  if (LangOpts.Sanitize.has(SanitizerKind::LocalBounds)) {
-    PMBuilder.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
-                           addBoundsCheckingPass);
-    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
-                           addBoundsCheckingPass);
-  }
-
-  if (CodeGenOpts.SanitizeCoverageType ||
-      CodeGenOpts.SanitizeCoverageIndirectCalls ||
-      CodeGenOpts.SanitizeCoverageTraceCmp) {
-    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
-                           addSanitizerCoveragePass);
-    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
-                           addSanitizerCoveragePass);
-  }
-
-  if (LangOpts.Sanitize.has(SanitizerKind::Address)) {
-    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
-                           addAddressSanitizerPasses);
-    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
-                           addAddressSanitizerPasses);
-  }
-
-  if (LangOpts.Sanitize.has(SanitizerKind::KernelAddress)) {
-    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
-                           addKernelAddressSanitizerPasses);
-    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
-                           addKernelAddressSanitizerPasses);
-  }
-
-  if (LangOpts.Sanitize.has(SanitizerKind::HWAddress)) {
-    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
-                           addHWAddressSanitizerPasses);
-    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
-                           addHWAddressSanitizerPasses);
-  }
-
-  if (LangOpts.Sanitize.has(SanitizerKind::KernelHWAddress)) {
-    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
-                           addKernelHWAddressSanitizerPasses);
-    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
-                           addKernelHWAddressSanitizerPasses);
-  }
-
-  if (LangOpts.Sanitize.has(SanitizerKind::Memory)) {
-    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
-                           addMemorySanitizerPass);
-    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
-                           addMemorySanitizerPass);
-  }
-
-  if (LangOpts.Sanitize.has(SanitizerKind::KernelMemory)) {
-    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
-                           addKernelMemorySanitizerPass);
-    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
-                           addKernelMemorySanitizerPass);
-  }
-
-  if (LangOpts.Sanitize.has(SanitizerKind::Thread)) {
-    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
-                           addThreadSanitizerPass);
-    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
-                           addThreadSanitizerPass);
-  }
-
-  if (LangOpts.Sanitize.has(SanitizerKind::DataFlow)) {
-    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
-                           addDataFlowSanitizerPass);
-    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
-                           addDataFlowSanitizerPass);
-  }
-
-  // Set up the per-function pass manager.
-  FPM.add(new TargetLibraryInfoWrapperPass(*TLII));
-  if (CodeGenOpts.VerifyModule)
-    FPM.add(createVerifierPass());
-
-  // Set up the per-module pass manager.
-  if (!CodeGenOpts.RewriteMapFiles.empty())
-    addSymbolRewriterPass(CodeGenOpts, &MPM);
-
-  // Add UniqueInternalLinkageNames Pass which renames internal linkage symbols
-  // with unique names.
-  if (CodeGenOpts.UniqueInternalLinkageNames) {
-    MPM.add(createUniqueInternalLinkageNamesPass());
-  }
-
-  if (Optional<GCOVOptions> Options = getGCOVOptions(CodeGenOpts, LangOpts)) {
-    MPM.add(createGCOVProfilerPass(*Options));
-    if (CodeGenOpts.getDebugInfo() == codegenoptions::NoDebugInfo)
-      MPM.add(createStripSymbolsPass(true));
-  }
-
-  if (Optional<InstrProfOptions> Options =
-          getInstrProfOptions(CodeGenOpts, LangOpts))
-    MPM.add(createInstrProfilingLegacyPass(*Options, false));
-
-  bool hasIRInstr = false;
-  if (CodeGenOpts.hasProfileIRInstr()) {
-    PMBuilder.EnablePGOInstrGen = true;
-    hasIRInstr = true;
-  }
-  if (CodeGenOpts.hasProfileCSIRInstr()) {
-    assert(!CodeGenOpts.hasProfileCSIRUse() &&
-           "Cannot have both CSProfileUse pass and CSProfileGen pass at the "
-           "same time");
-    assert(!hasIRInstr &&
-           "Cannot have both ProfileGen pass and CSProfileGen pass at the "
-           "same time");
-    PMBuilder.EnablePGOCSInstrGen = true;
-    hasIRInstr = true;
-  }
-  if (hasIRInstr) {
-    if (!CodeGenOpts.InstrProfileOutput.empty())
-      PMBuilder.PGOInstrGen = CodeGenOpts.InstrProfileOutput;
-    else
-      PMBuilder.PGOInstrGen = std::string(DefaultProfileGenName);
-  }
-  if (CodeGenOpts.hasProfileIRUse()) {
-    PMBuilder.PGOInstrUse = CodeGenOpts.ProfileInstrumentUsePath;
-    PMBuilder.EnablePGOCSInstrUse = CodeGenOpts.hasProfileCSIRUse();
-  }
-
-  if (!CodeGenOpts.SampleProfileFile.empty())
-    PMBuilder.PGOSampleUse = CodeGenOpts.SampleProfileFile;
-
-  PMBuilder.populateFunctionPassManager(FPM);
-  PMBuilder.populateModulePassManager(MPM);
-}
-
 static void setCommandLineOpts(const CodeGenOptions &CodeGenOpts) {
   SmallVector<const char *, 16> BackendArgs;
   BackendArgs.push_back("clang"); // Fake program name.
@@ -875,6 +653,223 @@ static PassBuilder::OptimizationLevel mapToLevel(const CodeGenOptions &Opts) {
   }
 }
 
+// Helper to add AnnotationRemarksPass.
+static void addAnnotationRemarksPass(ModulePassManager &MPM) {
+  FunctionPassManager FPM;
+  FPM.addPass(AnnotationRemarksPass());
+  MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+}
+
+static ModulePassManager buildModuleSimplificationPipeline(PassBuilder::OptimizationLevel Level,
+                                                           PassBuilder::ThinLTOPhase Phase) {
+  ModulePassManager MPM(false);
+  
+  // Do basic inference of function attributes from known properties of system
+  // libraries and other oracles.
+  MPM.addPass(InferFunctionAttrsPass());
+  
+  // Create an early function pass manager to cleanup the output of the
+  // frontend.
+  FunctionPassManager EarlyFPM(false);
+  EarlyFPM.addPass(SimplifyCFGPass());
+  EarlyFPM.addPass(SROA());
+  EarlyFPM.addPass(EarlyCSEPass());
+  EarlyFPM.addPass(LowerExpectIntrinsicPass());
+  if (Level == PassBuilder::OptimizationLevel::O3)
+    EarlyFPM.addPass(CallSiteSplittingPass());
+  
+  MPM.addPass(createModuleToFunctionPassAdaptor(std::move(EarlyFPM)));
+  
+  // Interprocedural constant propagation now that basic cleanup has occurred
+  // and prior to optimizing globals.
+  // FIXME: This position in the pipeline hasn't been carefully considered in
+  // years, it should be re-analyzed.
+  MPM.addPass(IPSCCPPass());
+  
+  // Attach metadata to indirect call sites indicating the set of functions
+  // they may target at run-time. This should follow IPSCCP.
+  MPM.addPass(CalledValuePropagationPass());
+
+  // Optimize globals to try and fold them into constants.
+  MPM.addPass(GlobalOptPass());
+  
+  // Promote any localized globals to SSA registers.
+  // FIXME: Should this instead by a run of SROA?
+  // FIXME: We should probably run instcombine and simplify-cfg afterward to
+  // delete control flows that are dead once globals have been folded to
+  // constants.
+  MPM.addPass(createModuleToFunctionPassAdaptor(PromotePass()));
+
+  // Remove any dead arguments exposed by cleanups and constant folding
+  // globals.
+  MPM.addPass(DeadArgumentEliminationPass());
+  
+  // Create a small function pass pipeline to cleanup after all the global
+  // optimizations.
+  FunctionPassManager GlobalCleanupPM(false);
+  GlobalCleanupPM.addPass(InstCombinePass());
+  // invokePeepholeEPCallbacks(GlobalCleanupPM, Level);
+
+  GlobalCleanupPM.addPass(SimplifyCFGPass());
+  MPM.addPass(createModuleToFunctionPassAdaptor(std::move(GlobalCleanupPM)));
+  
+  // MPM.addPass(buildInlinerPipeline(Level, Phase, /*MandatoryOnly=*/false));
+  
+  return MPM;
+}
+
+static ModulePassManager buildModuleOptimizationPipeline(PassBuilder::OptimizationLevel Level,
+                                                         bool LTOPreLink) {
+  ModulePassManager MPM(false);
+  
+  // Optimize globals now that the module is fully simplified.
+  MPM.addPass(GlobalOptPass());
+  MPM.addPass(GlobalDCEPass());
+  
+  // Remove avail extern fns and globals definitions since we aren't compiling
+  // an object file for later LTO. For LTO we want to preserve these so they
+  // are eligible for inlining at link-time. Note if they are unreferenced they
+  // will be removed by GlobalDCE later, so this only impacts referenced
+  // available externally globals. Eventually they will be suppressed during
+  // codegen, but eliminating here enables more opportunity for GlobalDCE as it
+  // may make globals referenced by available external functions dead and saves
+  // running remaining passes on the eliminated functions. These should be
+  // preserved during prelinking for link-time inlining decisions.
+  MPM.addPass(EliminateAvailableExternallyPass());
+  
+  // Do RPO function attribute inference across the module to forward-propagate
+  // attributes where applicable.
+  // FIXME: Is this really an optimization rather than a canonicalization?
+  MPM.addPass(ReversePostOrderFunctionAttrsPass());
+  
+  // Re-require GloblasAA here prior to function passes. This is particularly
+  // useful as the above will have inlined, DCE'ed, and function-attr
+  // propagated everything. We should at this point have a reasonably minimal
+  // and richly annotated call graph. By computing aliasing and mod/ref
+  // information for all local globals here, the late loop passes and notably
+  // the vectorizer will be able to use them to help recognize vectorizable
+  // memory operations.
+  MPM.addPass(RequireAnalysisPass<GlobalsAA, Module>());
+  
+  FunctionPassManager OptimizePM(false);
+  OptimizePM.addPass(Float2IntPass());
+  OptimizePM.addPass(LowerConstantIntrinsicsPass());
+  
+  // Distribute loops to allow partial vectorization.  I.e. isolate dependences
+  // into separate loop that would otherwise inhibit vectorization.  This is
+  // currently only performed for loops marked with the metadata
+  // llvm.loop.distribute=true or when -enable-loop-distribute is specified.
+  OptimizePM.addPass(LoopDistributePass());
+
+  // Populates the VFABI attribute with the scalar-to-vector mappings
+  // from the TargetLibraryInfo.
+  OptimizePM.addPass(InjectTLIMappings());
+
+  // Eliminate loads by forwarding stores from the previous iteration to loads
+  // of the current iteration.
+  OptimizePM.addPass(LoopLoadEliminationPass());
+
+  // Cleanup after the loop optimization passes.
+  OptimizePM.addPass(InstCombinePass());
+
+  // Now that we've formed fast to execute loop structures, we do further
+  // optimizations. These are run afterward as they might block doing complex
+  // analyses and transforms such as what are needed for loop vectorization.
+
+  // Cleanup after loop vectorization, etc. Simplification passes like CVP and
+  // GVN, loop transforms, and others have already run, so it's now better to
+  // convert to more optimized IR using more aggressive simplify CFG options.
+  // The extra sinking transform can create larger basic blocks, so do this
+  // before SLP vectorization.
+  // FIXME: study whether hoisting and/or sinking of common instructions should
+  //        be delayed until after SLP vectorizer.
+  OptimizePM.addPass(SimplifyCFGPass(SimplifyCFGOptions()
+                                         .forwardSwitchCondToPhi(true)
+                                         .convertSwitchToLookupTable(true)
+                                         .needCanonicalLoops(false)
+                                         .hoistCommonInsts(true)
+                                         .sinkCommonInsts(true)));
+  
+  // Enhance/cleanup vector code.
+  OptimizePM.addPass(VectorCombinePass());
+  OptimizePM.addPass(InstCombinePass());
+  
+  OptimizePM.addPass(LoopUnrollAndJamPass(Level.getSpeedupLevel()));
+  
+  OptimizePM.addPass(LoopUnrollPass(LoopUnrollOptions(
+      Level.getSpeedupLevel(), /*OnlyWhenForced=*/false,
+      false)));
+  OptimizePM.addPass(WarnMissedTransformationsPass());
+  OptimizePM.addPass(InstCombinePass());
+  OptimizePM.addPass(RequireAnalysisPass<OptimizationRemarkEmitterAnalysis, Function>());
+  OptimizePM.addPass(createFunctionToLoopPassAdaptor(
+      // LICMPass(PTO.LicmMssaOptCap, PTO.LicmMssaNoAccForPromotionCap),
+      LICMPass(100, 250),
+      EnableMSSALoopDependency, /*UseBlockFrequencyInfo=*/true, false));
+
+  // Now that we've vectorized and unrolled loops, we may have more refined
+  // alignment information, try to re-derive it here.
+  OptimizePM.addPass(AlignmentFromAssumptionsPass());
+  
+  // LoopSink pass sinks instructions hoisted by LICM, which serves as a
+  // canonicalization pass that enables other optimizations. As a result,
+  // LoopSink pass needs to be a very late IR pass to avoid undoing LICM
+  // result too early.
+  OptimizePM.addPass(LoopSinkPass());
+
+  // And finally clean up LCSSA form before generating code.
+  OptimizePM.addPass(InstSimplifyPass());
+
+  // This hoists/decomposes div/rem ops. It should run after other sink/hoist
+  // passes to avoid re-sinking, but before SimplifyCFG because it can allow
+  // flattening of blocks.
+  OptimizePM.addPass(DivRemPairsPass());
+
+  // LoopSink (and other loop passes since the last simplifyCFG) might have
+  // resulted in single-entry-single-exit or empty blocks. Clean up the CFG.
+  OptimizePM.addPass(SimplifyCFGPass());
+
+  // Optimize PHIs by speculating around them when profitable. Note that this
+  // pass needs to be run after any PRE or similar pass as it is essentially
+  // inserting redundancies into the program. This even includes SimplifyCFG.
+  OptimizePM.addPass(SpeculateAroundPHIsPass());
+
+  // Add the core optimizing pipeline.
+  MPM.addPass(createModuleToFunctionPassAdaptor(std::move(OptimizePM)));
+
+  MPM.addPass(CGProfilePass());
+
+  // Now we need to do some global optimization transforms.
+  // FIXME: It would seem like these should come first in the optimization
+  // pipeline and maybe be the bottom of the canonicalization pipeline? Weird
+  // ordering here.
+  MPM.addPass(GlobalDCEPass());
+  MPM.addPass(ConstantMergePass());
+
+  return MPM;
+}
+
+static ModulePassManager buildPipeline(PassBuilder::OptimizationLevel Level) {
+  ModulePassManager MPM(false);
+  
+  // Convert @llvm.global.annotations to !annotation metadata.
+  MPM.addPass(Annotation2MetadataPass());
+
+  // Force any function attributes we want the rest of the pipeline to observe.
+  MPM.addPass(ForceFunctionAttrsPass());
+  
+  // Add the core simplification pipeline.
+  MPM.addPass(buildModuleSimplificationPipeline(Level, PassBuilder::ThinLTOPhase::None));
+
+  // Now add the optimization pipeline.
+  MPM.addPass(buildModuleOptimizationPipeline(Level, false));
+
+  // Emit annotation remarks.
+  addAnnotationRemarksPass(MPM);
+
+  return MPM;
+}
+
 /// A clean version of `EmitAssembly` that uses the new pass manager.
 ///
 /// Not all features are currently supported in this system, but where
@@ -940,152 +935,18 @@ void EmitAssemblyHelper::EmitAssemblyWithNewPassManager(std::unique_ptr<raw_pwri
     // configure the pipeline.
     PassBuilder::OptimizationLevel Level = mapToLevel(CodeGenOpts);
 
-    bool IsThinLTO = CodeGenOpts.PrepareForThinLTO;
-    bool IsLTO = CodeGenOpts.PrepareForLTO;
-
-    // If we reached here with a non-empty index file name, then the index
-    // file was empty and we are not performing ThinLTO backend compilation
-    // (used in testing in a distributed build environment). Drop any the type
-    // test assume sequences inserted for whole program vtables so that
-    // codegen doesn't complain.
-    if (!CodeGenOpts.ThinLTOIndexFile.empty())
-      PB.registerPipelineStartEPCallback(
-          [](ModulePassManager &MPM, PassBuilder::OptimizationLevel Level) {
-            MPM.addPass(LowerTypeTestsPass(/*ExportSummary=*/nullptr,
-                                           /*ImportSummary=*/nullptr,
-                                           /*DropTypeTests=*/true));
-          });
-
-    if (Level != PassBuilder::OptimizationLevel::O0) {
-      PB.registerPipelineStartEPCallback(
-          [](ModulePassManager &MPM, PassBuilder::OptimizationLevel Level) {
-            MPM.addPass(createModuleToFunctionPassAdaptor(
-                EntryExitInstrumenterPass(/*PostInlining=*/false)));
-          });
-    }
-
-    // Register callbacks to schedule sanitizer passes at the appropriate part
-    // of the pipeline.
-    if (LangOpts.Sanitize.has(SanitizerKind::LocalBounds))
-      PB.registerScalarOptimizerLateEPCallback(
-          [](FunctionPassManager &FPM, PassBuilder::OptimizationLevel Level) {
-            FPM.addPass(BoundsCheckingPass());
-          });
-
-    if (CodeGenOpts.SanitizeCoverageType ||
-        CodeGenOpts.SanitizeCoverageIndirectCalls ||
-        CodeGenOpts.SanitizeCoverageTraceCmp) {
-      PB.registerOptimizerLastEPCallback(
-          [this](ModulePassManager &MPM, PassBuilder::OptimizationLevel Level) {
-            auto SancovOpts = getSancovOptsFromCGOpts(CodeGenOpts);
-            MPM.addPass(ModuleSanitizerCoveragePass(
-                SancovOpts, CodeGenOpts.SanitizeCoverageAllowlistFiles,
-                CodeGenOpts.SanitizeCoverageBlocklistFiles));
-          });
-    }
-
-    if (LangOpts.Sanitize.has(SanitizerKind::Memory)) {
-      int TrackOrigins = CodeGenOpts.SanitizeMemoryTrackOrigins;
-      bool Recover = CodeGenOpts.SanitizeRecover.has(SanitizerKind::Memory);
-      PB.registerOptimizerLastEPCallback(
-          [TrackOrigins, Recover](ModulePassManager &MPM,
-                                  PassBuilder::OptimizationLevel Level) {
-            MPM.addPass(MemorySanitizerPass({TrackOrigins, Recover, false}));
-            MPM.addPass(createModuleToFunctionPassAdaptor(
-                MemorySanitizerPass({TrackOrigins, Recover, false})));
-          });
-    }
-    if (LangOpts.Sanitize.has(SanitizerKind::Thread)) {
-      PB.registerOptimizerLastEPCallback(
-          [](ModulePassManager &MPM, PassBuilder::OptimizationLevel Level) {
-            MPM.addPass(ThreadSanitizerPass());
-            MPM.addPass(
-                createModuleToFunctionPassAdaptor(ThreadSanitizerPass()));
-          });
-    }
-
-    auto ASanPass = [&](SanitizerMask Mask, bool CompileKernel) {
-      if (LangOpts.Sanitize.has(Mask)) {
-        bool Recover = CodeGenOpts.SanitizeRecover.has(Mask);
-        bool UseAfterScope = CodeGenOpts.SanitizeAddressUseAfterScope;
-        bool ModuleUseAfterScope = asanUseGlobalsGC(TargetTriple, CodeGenOpts);
-        bool UseOdrIndicator = CodeGenOpts.SanitizeAddressUseOdrIndicator;
-        PB.registerOptimizerLastEPCallback(
-            [CompileKernel, Recover, UseAfterScope, ModuleUseAfterScope,
-             UseOdrIndicator](ModulePassManager &MPM,
-                              PassBuilder::OptimizationLevel Level) {
-              MPM.addPass(
-                  RequireAnalysisPass<ASanGlobalsMetadataAnalysis, Module>());
-              MPM.addPass(ModuleAddressSanitizerPass(CompileKernel, Recover,
-                                                     ModuleUseAfterScope,
-                                                     UseOdrIndicator));
-              MPM.addPass(createModuleToFunctionPassAdaptor(
-                  AddressSanitizerPass(CompileKernel, Recover, UseAfterScope)));
-            });
-      }
-    };
-    ASanPass(SanitizerKind::Address, false);
-    ASanPass(SanitizerKind::KernelAddress, true);
-
-    auto HWASanPass = [&](SanitizerMask Mask, bool CompileKernel) {
-      if (LangOpts.Sanitize.has(Mask)) {
-        bool Recover = CodeGenOpts.SanitizeRecover.has(Mask);
-        PB.registerOptimizerLastEPCallback(
-            [CompileKernel, Recover](ModulePassManager &MPM,
-                                     PassBuilder::OptimizationLevel Level) {
-              MPM.addPass(HWAddressSanitizerPass(CompileKernel, Recover));
-            });
-      }
-    };
-    HWASanPass(SanitizerKind::HWAddress, false);
-    HWASanPass(SanitizerKind::KernelHWAddress, true);
-
-    if (LangOpts.Sanitize.has(SanitizerKind::DataFlow)) {
-      PB.registerOptimizerLastEPCallback(
-          [this](ModulePassManager &MPM, PassBuilder::OptimizationLevel Level) {
-            MPM.addPass(
-                DataFlowSanitizerPass(LangOpts.SanitizerBlacklistFiles));
-          });
-    }
-
-    if (Optional<GCOVOptions> Options = getGCOVOptions(CodeGenOpts, LangOpts))
-      PB.registerPipelineStartEPCallback(
-          [Options](ModulePassManager &MPM,
-                    PassBuilder::OptimizationLevel Level) {
-            MPM.addPass(GCOVProfilerPass(*Options));
-          });
-    if (Optional<InstrProfOptions> Options =
-            getInstrProfOptions(CodeGenOpts, LangOpts))
-      PB.registerPipelineStartEPCallback(
-          [Options](ModulePassManager &MPM,
-                    PassBuilder::OptimizationLevel Level) {
-            MPM.addPass(InstrProfiling(*Options, false));
-          });
-
     if (CodeGenOpts.OptimizationLevel == 0) {
-      MPM = PB.buildO0DefaultPipeline(Level, IsLTO || IsThinLTO);
-    } else if (IsThinLTO) {
-      MPM = PB.buildThinLTOPreLinkDefaultPipeline(Level);
-    } else if (IsLTO) {
-      MPM = PB.buildLTOPreLinkDefaultPipeline(Level);
+      MPM = PB.buildO0DefaultPipeline(Level, false);
     } else {
-      MPM = PB.buildPerModuleDefaultPipeline(Level);
-    }
-
-    // Add UniqueInternalLinkageNames Pass which renames internal linkage
-    // symbols with unique names.
-    if (CodeGenOpts.UniqueInternalLinkageNames)
-      MPM.addPass(UniqueInternalLinkageNamesPass());
-
-    if (!CodeGenOpts.MemoryProfileOutput.empty()) {
-      MPM.addPass(createModuleToFunctionPassAdaptor(MemProfilerPass()));
-      MPM.addPass(ModuleMemProfilerPass());
+      MPM = buildPipeline(Level);
     }
   }
+  
+  // MPM.addPass(createModuleToFunctionPassAdaptor(PromotePass()));
 
   // Append any output we need to the pass manager.
-  // MPM.addPass(c2ssa::PrintModulePass(*OS, "", CodeGenOpts.EmitLLVMUseLists));
-  MPM.addPass(createModuleToFunctionPassAdaptor(c2ssa::PrintModulePass(*OS, "", CodeGenOpts.EmitLLVMUseLists)));
+  MPM.addPass(c2ssa::PrintGlobalsPass(*OS, "", CodeGenOpts.EmitLLVMUseLists));
+  MPM.addPass(createModuleToFunctionPassAdaptor(c2ssa::PrintFunctionPass(*OS, "", CodeGenOpts.EmitLLVMUseLists)));
 
   // Before executing passes, print the final values of the LLVM options.
   cl::PrintOptionValues();

@@ -25,20 +25,31 @@
 using namespace llvm;
 using namespace c2ssa;
 
-PrintModulePass::PrintModulePass() : OS(dbgs()) {}
-PrintModulePass::PrintModulePass(raw_ostream &OS, const std::string &Banner,
-                                 bool ShouldPreserveUseListOrder)
-    : OS(OS), Banner(Banner),
+PrintFunctionPass::PrintFunctionPass(raw_ostream &OS, CWriter &writer, const std::string &Banner,
+                                     bool ShouldPreserveUseListOrder)
+    : OS(OS), writer(writer), Banner(Banner),
       ShouldPreserveUseListOrder(ShouldPreserveUseListOrder) {}
 
-PreservedAnalyses PrintModulePass::run(Function &F, FunctionAnalysisManager &AM) {
+PreservedAnalyses PrintFunctionPass::run(Function &F, FunctionAnalysisManager &AM) {
   if (!Banner.empty())
     OS << Banner << "\n";
 
   auto &LI = AM.getResult<LoopAnalysis>(F);
   auto TD = new DataLayout(F.getParent());
-  CWriter writer(OS, F, &LI, TD);
-  writer.printFunction(F);
+  // CWriter writer(OS, F, &LI, TD);
+  writer.printFunction(F, &LI);
+
+  return PreservedAnalyses::all();
+}
+
+PrintGlobalsPass::PrintGlobalsPass(raw_ostream &OS, CWriter &writer, const std::string &Banner,
+                                     bool ShouldPreserveUseListOrder)
+    : OS(OS), writer(writer), Banner(Banner),
+      ShouldPreserveUseListOrder(ShouldPreserveUseListOrder) {}
+
+PreservedAnalyses PrintGlobalsPass::run(Module &M, ModuleAnalysisManager &AM) {
+  if (!Banner.empty())
+    OS << Banner << "\n";
 
   return PreservedAnalyses::all();
 }

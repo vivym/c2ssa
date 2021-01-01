@@ -335,16 +335,21 @@ raw_ostream &CWriter::printSimpleType(raw_ostream &Out, Type *Ty,
     return Out << "void";
   case Type::IntegerTyID: {
     unsigned NumBits = cast<IntegerType>(Ty)->getBitWidth();
+    isSigned = true;
     if (NumBits == 1)
       return Out << "bool";
     else if (NumBits <= 8)
-      return Out << (isSigned ? "int8_t" : "uint8_t");
+      // return Out << (isSigned ? "int8_t" : "uint8_t");
+      return Out << (isSigned ? "char" : "uint8_t");
     else if (NumBits <= 16)
-      return Out << (isSigned ? "int16_t" : "uint16_t");
+      // return Out << (isSigned ? "int16_t" : "uint16_t");
+      return Out << (isSigned ? "short" : "uint16_t");
     else if (NumBits <= 32)
-      return Out << (isSigned ? "int32_t" : "uint32_t");
+      // return Out << (isSigned ? "int32_t" : "uint32_t");
+      return Out << (isSigned ? "int" : "uint32_t");
     else if (NumBits <= 64)
-      return Out << (isSigned ? "int64_t" : "uint64_t");
+      // return Out << (isSigned ? "int64_t" : "uint64_t");
+      return Out << (isSigned ? "long long" : "uint64_t");
     else {
       cwriter_assert(NumBits <= 128 && "Bit widths > 128 not implemented yet");
       return Out << (isSigned ? "int128_t" : "uint128_t");
@@ -1081,7 +1086,9 @@ void CWriter::printConstant(Constant *CPV, enum OperandContext Context) {
         Out << CI->getSExtValue();
       Out << ')';
     } else if (Ty->getPrimitiveSizeInBits() <= 32) {
-      Out << CI->getZExtValue() << 'u';
+      /// TODO:
+      // Out << CI->getZExtValue() << 'u';
+      Out << CI->getZExtValue();
     } else if (Ty->getPrimitiveSizeInBits() <= 64) {
       Out << "UINT64_C(" << CI->getZExtValue() << ")";
     } else if (Ty->getPrimitiveSizeInBits() <= 128) {
@@ -1388,7 +1395,7 @@ std::string CWriter::GetValueName(Value *Operand) {
       VarName += ch;
   }
 
-  return "c2ssa_" + VarName;
+  return VarName;
 }
 
 /// writeInstComputationInline - Emit the computation for the specified
@@ -1504,10 +1511,14 @@ void CWriter::opcodeNeedsCast(
     bool &shouldCast,
     // Indicate whether the cast should be to a signed type or not.
     bool &castIsSigned) {
+  
+  shouldCast = false;
+  castIsSigned = false;
 
   // Based on the Opcode for which this Operand is being written, determine
   // the new type to which the operand should be casted by setting the value
   // of OpTy. If we change OpTy, also set shouldCast to true.
+  /*
   switch (Opcode) {
   default:
     // for most instructions, it doesn't matter
@@ -1522,9 +1533,7 @@ void CWriter::opcodeNeedsCast(
   case Instruction::LShr:
   case Instruction::UDiv:
   case Instruction::URem: // Cast to unsigned first
-    /// TODO:
-    // shouldCast = true;
-    shouldCast = false;
+    shouldCast = true;
     castIsSigned = false;
     break;
   case Instruction::GetElementPtr:
@@ -1535,6 +1544,7 @@ void CWriter::opcodeNeedsCast(
     castIsSigned = true;
     break;
   }
+  */
 }
 
 void CWriter::writeOperandWithCast(Value *Operand, unsigned Opcode) {
@@ -1566,6 +1576,8 @@ void CWriter::writeOperandWithCast(Value *Operand, ICmpInst &Cmp) {
   // optimize things like "p < NULL" to false (p may contain an integer value
   // f.e.).
   bool shouldCast = Cmp.isRelational();
+  /// TODO:
+  shouldCast = false;
 
   // Write out the casted operand if we should, otherwise just write the
   // operand.
@@ -2129,7 +2141,14 @@ static inline bool isFPIntBitCast(Instruction &I) {
          (DstTy->isFloatingPointTy() && SrcTy->isIntegerTy());
 }
 
-void CWriter::printFunction(Function &F) {
+void CWriter::printFunction(Function &F, llvm::LoopInfo *LI, const llvm::DataLayout *TD) {
+  this->LI = LI;
+  this->TD = TD;
+  if (this->IL != nullptr) {
+    delete this->IL;
+  }
+  this->IL = new IntrinsicLowering(*TD);
+
   /// isStructReturn - Should this function actually return a struct by-value?
   bool isStructReturn = F.hasStructRetAttr();
 
@@ -2221,8 +2240,8 @@ void CWriter::printFunction(Function &F) {
 }
 
 void CWriter::printLoop(Loop *L) {
-  Out << "  do {     /* Syntactic loop '" << L->getHeader()->getName()
-      << "' to make GCC happy */\n";
+  // Out << "  do {     /* Syntactic loop '" << L->getHeader()->getName()
+  //     << "' to make GCC happy */\n";
   for (unsigned i = 0, e = L->getBlocks().size(); i != e; ++i) {
     BasicBlock *BB = L->getBlocks()[i];
     Loop *BBLoop = LI->getLoopFor(BB);
@@ -2231,8 +2250,8 @@ void CWriter::printLoop(Loop *L) {
     else if (BB == BBLoop->getHeader() && BBLoop->getParentLoop() == L)
       printLoop(BBLoop);
   }
-  Out << "  } while (1); /* end of syntactic loop '"
-      << L->getHeader()->getName() << "' */\n";
+  // Out << "  } while (1); /* end of syntactic loop '"
+  //     << L->getHeader()->getName() << "' */\n";
 }
 
 void CWriter::printBasicBlock(BasicBlock *BB) {
@@ -2550,7 +2569,9 @@ void CWriter::visitBinaryOperator(BinaryOperator &I) {
 
     // Write out the cast of the instruction's value back to the proper type
     // if necessary.
-    bool NeedsClosingParens = writeInstructionCast(I);
+    /// TODO:
+    // bool NeedsClosingParens = writeInstructionCast(I);
+    bool NeedsClosingParens = false;
 
     // Certain instructions require the operand to be forced to a specific type
     // so we use writeOperandWithCast here instead of writeOperand. Similarly
@@ -2775,6 +2796,7 @@ void CWriter::visitCastInst(CastInst &I) {
 void CWriter::visitSelectInst(SelectInst &I) {
   CurInstr = &I;
 
+  /*
   Out << "llvm_select_";
   printTypeString(Out, I.getType(), false);
   Out << "(";
@@ -2784,7 +2806,16 @@ void CWriter::visitSelectInst(SelectInst &I) {
   Out << ", ";
   writeOperand(I.getFalseValue(), ContextCasted);
   Out << ")";
+  */
+  Out << "(";
+  writeOperand(I.getCondition(), ContextCasted);
+  Out << " ? ";
+  writeOperand(I.getTrueValue(), ContextCasted);
+  Out << " : ";
+  writeOperand(I.getFalseValue(), ContextCasted);
+  Out << ")";
   SelectDeclTypes.insert(I.getType());
+  
   cwriter_assert(
       I.getCondition()->getType()->isVectorTy() ==
       I.getType()->isVectorTy()); // TODO: might be scalarty == vectorty

@@ -34,7 +34,6 @@ private:
   raw_ostream &Out;
   llvm::IntrinsicLowering *IL = nullptr;
   llvm::LoopInfo *LI = nullptr;
-  llvm::Function &F;
   const llvm::DataLayout *TD = nullptr;
   const llvm::Instruction *CurInstr = nullptr;
 
@@ -117,13 +116,11 @@ private:
   void generateCompilerSpecificCode(raw_ostream &Out, const DataLayout *) const;
   
 public:
-  explicit CWriter(llvm::raw_ostream &Out, llvm::Function &F,
-                   llvm::LoopInfo *LI, const llvm::DataLayout *TD):
-  Out(Out), F(F), LI(LI), TD(TD), IL(new IntrinsicLowering(*TD)) {
+  explicit CWriter(llvm::raw_ostream &Out): Out(Out) {
     memset(&UsedHeaders, 0, sizeof(UsedHeaders));
   }
   
-  void printFunction(llvm::Function &);
+  void printFunction(llvm::Function &, llvm::LoopInfo *, const llvm::DataLayout *);
   
 private:
   void generateHeader(Module &M);
