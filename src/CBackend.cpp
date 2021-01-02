@@ -2708,7 +2708,7 @@ void CWriter::printFunction(Function &F, llvm::LoopInfo *LI) {
         Out << " __attribute__((aligned(" << Alignment << ")))";
       Out << ";    /* Address-exposed local */\n";
       PrintedVar = true;
-    } else if (!isEmptyType(I->getType()) && !isInlinableInst(*I)) {
+    } else if (!isEmptyType(I->getType()) && !isInlinableInst(*I) && I->getNumUses() > 0) {
       Out << "  ";
       printTypeName(Out, I->getType(), false) << ' ' << GetValueName(&*I);
       Out << ";\n";
@@ -2787,7 +2787,7 @@ void CWriter::printBasicBlock(BasicBlock *BB) {
       LastAnnotatedSourceLine = Loc->getLine();
     }
     if (!isInlinableInst(*II) && !isDirectAlloca(&*II)) {
-      if (!isEmptyType(II->getType()) && !isInlineAsm(*II))
+      if (!isEmptyType(II->getType()) && !isInlineAsm(*II) && II->getNumUses() > 0)
         outputLValue(&*II);
 
       else
@@ -3717,8 +3717,9 @@ void CWriter::visitCallInst(CallInst &I) {
     Out << " = ";
   }
 
-  if (I.isTailCall())
-    Out << " /*tail*/ ";
+  /// TODO:
+  // if (I.isTailCall())
+  //   Out << " /*tail*/ ";
 
   // If this is an indirect call to a struct return function, we need to cast
   // the pointer. Ditto for indirect calls with byval arguments.
