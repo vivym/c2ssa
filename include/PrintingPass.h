@@ -36,11 +36,17 @@ class PrintModulePass : public llvm::PassInfoMixin<PrintGlobalsPass> {
   std::string Banner;
   
 public:
+  PrintModulePass();
   PrintModulePass(llvm::raw_ostream &OS, const std::string &Banner = "");
   
   llvm::PreservedAnalyses run(llvm::Module &M, llvm::ModuleAnalysisManager &AM);
   static bool isRequired() { return true; }
 };
+
+FunctionPass *createPrintModulePass(raw_ostream &OS,
+                                  const std::string &Banner = "");
+
+void initializeC2SSAPrintModulePass(PassRegistry &Registry);
 
 } // namespace c2ssa
 

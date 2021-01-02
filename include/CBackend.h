@@ -123,6 +123,7 @@ public:
     memset(&UsedHeaders, 0, sizeof(UsedHeaders));
   }
   
+  void printFloatingPointConstants(llvm::Function &F);
   void printFunction(llvm::Function &, llvm::LoopInfo *);
   void generateHeader(Module &M);
   
@@ -204,7 +205,6 @@ private:
   void printModuleTypes(raw_ostream &Out);
   void printContainedTypes(raw_ostream &Out, Type *Ty, std::set<Type *> &);
   
-  void printFloatingPointConstants(llvm::Function &F);
   void printFloatingPointConstants(const llvm::Constant *C);
 
   void printBasicBlock(llvm::BasicBlock *BB);

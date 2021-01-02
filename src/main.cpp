@@ -7,8 +7,8 @@
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Analysis/CFG.h"
 #include "clang/CodeGen/CodeGenAction.h"
-// Declares llvm::cl::extrahelp.
-#include "llvm/Support/CommandLine.h"
+#include "llvm/InitializePasses.h"
+#include "PrintingPass.h"
 #include "CodeGenAction.h"
 #include <vector>
 
@@ -26,5 +26,7 @@ int main(int argc, const char **argv) {
       SourcePathList
   );
 
+  llvm::PassRegistry *Registry = llvm::PassRegistry::getPassRegistry();
+  c2ssa::initializeC2SSAPrintModulePass(*Registry);
   return Tool.run(clang::tooling::newFrontendActionFactory<c2ssa::CodeGenAction>().get());
 }
