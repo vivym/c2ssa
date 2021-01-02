@@ -12,29 +12,32 @@ namespace llvm {
 namespace c2ssa {
 
 class PrintFunctionPass : public llvm::PassInfoMixin<PrintFunctionPass> {
-  llvm::raw_ostream &OS;
   CWriter &writer;
-  std::string Banner;
-  bool ShouldPreserveUseListOrder;
 
 public:
-  PrintFunctionPass(llvm::raw_ostream &OS, CWriter &writer, const std::string &Banner = "",
-                    bool ShouldPreserveUseListOrder = false);
+  PrintFunctionPass(CWriter &writer);
 
   llvm::PreservedAnalyses run(llvm::Function &F, llvm::FunctionAnalysisManager &AM);
   static bool isRequired() { return true; }
 };
 
 class PrintGlobalsPass : public llvm::PassInfoMixin<PrintGlobalsPass> {
-  llvm::raw_ostream &OS;
   CWriter &writer;
-  std::string Banner;
-  bool ShouldPreserveUseListOrder;
 
 public:
-  PrintGlobalsPass(llvm::raw_ostream &OS, CWriter &writer, const std::string &Banner = "",
-                   bool ShouldPreserveUseListOrder = false);
+  PrintGlobalsPass(CWriter &writer);
 
+  llvm::PreservedAnalyses run(llvm::Module &M, llvm::ModuleAnalysisManager &AM);
+  static bool isRequired() { return true; }
+};
+
+class PrintModulePass : public llvm::PassInfoMixin<PrintGlobalsPass> {
+  llvm::raw_ostream &OS;
+  std::string Banner;
+  
+public:
+  PrintModulePass(llvm::raw_ostream &OS, const std::string &Banner = "");
+  
   llvm::PreservedAnalyses run(llvm::Module &M, llvm::ModuleAnalysisManager &AM);
   static bool isRequired() { return true; }
 };

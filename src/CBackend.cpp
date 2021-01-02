@@ -1,5 +1,6 @@
-#include "CBackend.h"
 #include "llvm/IR/AbstractCallSite.h"
+#include "CBackend.h"
+#include "TopologicalSorter.h"
 
 using namespace llvm;
 
@@ -2010,6 +2011,422 @@ void CWriter::generateCompilerSpecificCode(raw_ostream &Out,
     defineStackSaveRestore(Out);
 }
 
+void CWriter::generateHeader(Module &M) {
+  // Keep track of which functions are static ctors/dtors so they can have
+  // an attribute added to their prototypes.
+  std::set<Function *> StaticCtors, StaticDtors;
+  for (Module::global_iterator I = M.global_begin(), E = M.global_end(); I != E;
+       ++I) {
+    switch (getGlobalVariableClass(&*I)) {
+    default:
+      break;
+    case GlobalCtors:
+      FindStaticTors(&*I, StaticCtors);
+      break;
+    case GlobalDtors:
+      FindStaticTors(&*I, StaticDtors);
+      break;
+    }
+  }
+  
+  // get declaration for alloca
+  OutHeaders << "/* Provide Declarations */\n";
+  OutHeaders << "#include <stdarg.h>\n"; // Varargs support
+  OutHeaders << "#include <setjmp.h>\n"; // Unwind support
+  OutHeaders << "#include <limits.h>\n"; // With overflow intrinsics support.
+  OutHeaders << "#include <stdint.h>\n"; // Sized integer support
+  OutHeaders << "#include <math.h>\n";   // definitions for some math functions
+                                       // and numeric constants
+  // Provide a definition for `bool' if not compiling with a C++ compiler.
+  OutHeaders << "#ifndef __cplusplus\ntypedef unsigned char bool;\n#endif\n";
+  OutHeaders << "\n";
+
+  Out << "\n\n/* Global Declarations */\n";
+  
+  // First output all the declarations for the program, because C requires
+  // Functions & globals to be declared before they are used.
+  if (!M.getModuleInlineAsm().empty()) {
+    Out << "\n/* Module asm statements */\n"
+        << "__asm__ (";
+
+    // Split the string into lines, to make it easier to read the .ll file.
+    std::string Asm = M.getModuleInlineAsm();
+    size_t CurPos = 0;
+    size_t NewLine = Asm.find_first_of('\n', CurPos);
+    while (NewLine != std::string::npos) {
+      // We found a newline, print the portion of the asm string from the
+      // last newline up to this newline.
+      Out << "\"";
+      PrintEscapedString(
+          std::string(Asm.begin() + CurPos, Asm.begin() + NewLine), Out);
+      Out << "\\n\"\n";
+      CurPos = NewLine + 1;
+      NewLine = Asm.find_first_of('\n', CurPos);
+    }
+    Out << "\"";
+    PrintEscapedString(std::string(Asm.begin() + CurPos, Asm.end()), Out);
+    Out << "\");\n"
+        << "/* End Module asm statements */\n";
+  }
+
+  // collect any remaining types
+  raw_null_ostream NullOut;
+  for (Module::global_iterator I = M.global_begin(), E = M.global_end(); I != E;
+       ++I) {
+    // Ignore special globals, such as debug info.
+    if (getGlobalVariableClass(&*I))
+      continue;
+    printTypeName(NullOut, I->getType()->getElementType(), false);
+  }
+  printModuleTypes(Out);
+  
+  // Global variable declarations...
+  if (!M.global_empty()) {
+    Out << "\n/* External Global Variable Declarations */\n";
+    for (Module::global_iterator I = M.global_begin(), E = M.global_end();
+         I != E; ++I) {
+      if (!I->isDeclaration() ||
+          isEmptyType(I->getType()->getPointerElementType()))
+        continue;
+
+      if (I->hasDLLImportStorageClass())
+        Out << "__declspec(dllimport) ";
+      else if (I->hasDLLExportStorageClass())
+        Out << "__declspec(dllexport) ";
+
+      if (I->hasExternalLinkage() || I->hasExternalWeakLinkage() ||
+          I->hasCommonLinkage())
+        Out << "extern ";
+      else
+        continue; // Internal Global
+
+      // Thread Local Storage
+      if (I->isThreadLocal())
+        Out << "__thread ";
+
+      Type *ElTy = I->getType()->getElementType();
+      unsigned Alignment = I->getAlignment();
+      bool IsOveraligned =
+          Alignment && Alignment > TD->getABITypeAlignment(ElTy);
+      if (IsOveraligned) {
+        headerUseMsAlign();
+        Out << "__MSALIGN__(" << Alignment << ") ";
+      }
+      printTypeName(Out, ElTy, false) << ' ' << GetValueName(&*I);
+      if (IsOveraligned)
+        Out << " __attribute__((aligned(" << Alignment << ")))";
+
+      if (I->hasExternalWeakLinkage()) {
+        headerUseExternalWeak();
+        Out << " __EXTERNAL_WEAK__";
+      }
+      Out << ";\n";
+    }
+  }
+  
+  // Function declarations
+  Out << "\n/* Function Declarations */\n";
+
+  // Store the intrinsics which will be declared/defined below.
+  SmallVector<Function *, 16> intrinsicsToDefine;
+
+  for (Module::iterator I = M.begin(), E = M.end(); I != E; ++I) {
+    // Don't print declarations for intrinsic functions.
+    // Store the used intrinsics, which need to be explicitly defined.
+    if (I->isIntrinsic()) {
+      switch (I->getIntrinsicID()) {
+      default:
+        continue;
+      case Intrinsic::uadd_with_overflow:
+      case Intrinsic::sadd_with_overflow:
+      case Intrinsic::usub_with_overflow:
+      case Intrinsic::ssub_with_overflow:
+      case Intrinsic::umul_with_overflow:
+      case Intrinsic::smul_with_overflow:
+      case Intrinsic::bswap:
+      case Intrinsic::ceil:
+      case Intrinsic::ctlz:
+      case Intrinsic::ctpop:
+      case Intrinsic::cttz:
+      case Intrinsic::fabs:
+      case Intrinsic::floor:
+      case Intrinsic::fma:
+      case Intrinsic::fmuladd:
+      case Intrinsic::pow:
+      case Intrinsic::powi:
+      case Intrinsic::rint:
+      case Intrinsic::sqrt:
+      case Intrinsic::trunc:
+        intrinsicsToDefine.push_back(&*I);
+        continue;
+      }
+    }
+
+    // Skip a few functions that have already been defined in headers
+    if (I->getName() == "setjmp" || I->getName() == "longjmp" ||
+        I->getName() == "_setjmp" || I->getName() == "siglongjmp" ||
+        I->getName() == "sigsetjmp" || I->getName() == "pow" ||
+        I->getName() == "powf" || I->getName() == "sqrt" ||
+        I->getName() == "sqrtf" || I->getName() == "trunc" ||
+        I->getName() == "truncf" || I->getName() == "rint" ||
+        I->getName() == "rintf" || I->getName() == "floor" ||
+        I->getName() == "floorf" || I->getName() == "ceil" ||
+        I->getName() == "ceilf" || I->getName() == "alloca" ||
+        I->getName() == "_alloca" || I->getName() == "_chkstk" ||
+        I->getName() == "__chkstk" || I->getName() == "___chkstk_ms")
+      continue;
+
+    if (I->hasDLLImportStorageClass())
+      Out << "__declspec(dllimport) ";
+    else if (I->hasDLLExportStorageClass())
+      Out << "__declspec(dllexport) ";
+
+    if (I->hasLocalLinkage())
+      Out << "static ";
+    if (I->hasExternalWeakLinkage())
+      Out << "extern ";
+    printFunctionProto(Out, &*I);
+    printFunctionAttributes(Out, I->getAttributes());
+    if (I->hasWeakLinkage() || I->hasLinkOnceLinkage()) {
+      headerUseAttributeWeak();
+      Out << " __ATTRIBUTE_WEAK__";
+    }
+    if (I->hasExternalWeakLinkage()) {
+      headerUseExternalWeak();
+      Out << " __EXTERNAL_WEAK__";
+    }
+    if (StaticCtors.count(&*I))
+      Out << " __ATTRIBUTE_CTOR__";
+    if (StaticDtors.count(&*I))
+      Out << " __ATTRIBUTE_DTOR__";
+    if (I->hasHiddenVisibility()) {
+      headerUseHidden();
+      Out << " __HIDDEN__";
+    }
+
+    if (I->hasName() && I->getName()[0] == 1)
+      Out << " __asm__ (\"" << I->getName().substr(1) << "\")";
+
+    Out << ";\n";
+  }
+  
+  // Output the global variable definitions and contents...
+  if (!M.global_empty()) {
+    Out << "\n\n/* Global Variable Definitions and Initialization */\n";
+    for (Module::global_iterator I = M.global_begin(), E = M.global_end();
+         I != E; ++I) {
+      declareOneGlobalVariable(&*I);
+    }
+  }
+
+  // Alias declarations...
+  if (!M.alias_empty()) {
+    Out << "\n/* External Alias Declarations */\n";
+    for (Module::alias_iterator I = M.alias_begin(), E = M.alias_end(); I != E;
+         ++I) {
+      cwriter_assert(!I->isDeclaration() &&
+                     !isEmptyType(I->getType()->getPointerElementType()));
+      if (I->hasLocalLinkage())
+        continue; // Internal Global
+
+      if (I->hasDLLImportStorageClass())
+        Out << "__declspec(dllimport) ";
+      else if (I->hasDLLExportStorageClass())
+        Out << "__declspec(dllexport) ";
+
+      // Thread Local Storage
+      if (I->isThreadLocal())
+        Out << "__thread ";
+
+      Type *ElTy = I->getType()->getElementType();
+      /// TODO:
+      /*
+      unsigned Alignment = I->getAlignment();
+      bool IsOveraligned =
+          Alignment && Alignment > TD->getABITypeAlignment(ElTy);
+      if (IsOveraligned) {
+        headerUseMsAlign();
+        Out << "__MSALIGN__(" << Alignment << ") ";
+      }
+      */
+      // GetValueName would resolve the alias, which is not what we want,
+      // so use getName directly instead (assuming that the Alias has a name...)
+      printTypeName(Out, ElTy, false) << " *" << I->getName();
+      /// TODO:
+      /*
+      if (IsOveraligned)
+        Out << " __attribute__((aligned(" << Alignment << ")))";
+      */
+
+      if (I->hasExternalWeakLinkage()) {
+        headerUseExternalWeak();
+        Out << " __EXTERNAL_WEAK__";
+      }
+      Out << " = ";
+      writeOperand(I->getAliasee(), ContextStatic);
+      Out << ";\n";
+    }
+  }
+  
+  Out << "\n\n/* LLVM Intrinsic Builtin Function Bodies */\n";
+
+  // Loop over all select operations
+  if (!SelectDeclTypes.empty())
+    headerUseForceInline();
+  for (std::set<Type *>::iterator it = SelectDeclTypes.begin(),
+                                  end = SelectDeclTypes.end();
+       it != end; ++it) {
+    // static __forceinline Rty llvm_select_u8x4(<bool x 4> condition, <u8 x 4>
+    // iftrue, <u8 x 4> ifnot) {
+    //   Rty r = {
+    //     condition[0] ? iftrue[0] : ifnot[0],
+    //     condition[1] ? iftrue[1] : ifnot[1],
+    //     condition[2] ? iftrue[2] : ifnot[2],
+    //     condition[3] ? iftrue[3] : ifnot[3]
+    //   };
+    //   return r;
+    // }
+    Out << "static __forceinline ";
+    printTypeNameUnaligned(Out, *it, false);
+    Out << " llvm_select_";
+    printTypeString(Out, *it, false);
+    Out << "(";
+    /// TODO:
+    /*
+    if (isa<VectorType>(*it))
+      printTypeNameUnaligned(
+          Out,
+          VectorType::get(Type::getInt1Ty((*it)->getContext()),
+                          (*it)->getVectorNumElements()),
+          false);
+    else
+      Out << "bool";
+    */
+    Out << "bool";
+    Out << " condition, ";
+    printTypeNameUnaligned(Out, *it, false);
+    Out << " iftrue, ";
+    printTypeNameUnaligned(Out, *it, false);
+    Out << " ifnot) {\n  ";
+    printTypeNameUnaligned(Out, *it, false);
+    Out << " r;\n";
+    /// TODO:
+    /*
+    if (isa<VectorType>(*it)) {
+      unsigned n, l = (*it)->getVectorNumElements();
+      for (n = 0; n < l; n++) {
+        Out << "  r.vector[" << n << "] = condition.vector[" << n
+            << "] ? iftrue.vector[" << n << "] : ifnot.vector[" << n << "];\n";
+      }
+    } else {
+      Out << "  r = condition ? iftrue : ifnot;\n";
+    }
+    */
+    Out << "  r = condition ? iftrue : ifnot;\n";
+    Out << "  return r;\n}\n";
+  }
+  
+  // Loop over all compare operations
+  if (!CmpDeclTypes.empty())
+    headerUseForceInline();
+  
+  if (!M.empty())
+    Out << "\n\n/* Function Bodies */\n";
+
+  if (!FCmpOps.empty())
+    headerUseForceInline();
+
+  generateCompilerSpecificCode(OutHeaders, TD);
+
+  // Loop over all fcmp compare operations. We do that after
+  // generateCompilerSpecificCode because we need __forceinline!
+  if (FCmpOps.erase(FCmpInst::FCMP_ORD)) {
+    defineFCmpOp(OutHeaders, FCmpInst::FCMP_ORD);
+  }
+  if (FCmpOps.erase(FCmpInst::FCMP_UNO)) {
+    defineFCmpOp(OutHeaders, FCmpInst::FCMP_UNO);
+  }
+  for (auto Pred : FCmpOps) {
+    defineFCmpOp(OutHeaders, Pred);
+  }
+  FCmpOps.clear();
+}
+
+void CWriter::declareOneGlobalVariable(GlobalVariable *I) {
+  if (I->isDeclaration() || isEmptyType(I->getType()->getPointerElementType()))
+    return;
+
+  // Ignore special globals, such as debug info.
+  if (getGlobalVariableClass(&*I))
+    return;
+
+  if (I->hasDLLImportStorageClass())
+    Out << "__declspec(dllimport) ";
+  else if (I->hasDLLExportStorageClass())
+    Out << "__declspec(dllexport) ";
+
+  if (I->hasLocalLinkage())
+    Out << "static ";
+
+  // Thread Local Storage
+  if (I->isThreadLocal())
+    Out << "__thread ";
+
+  Type *ElTy = I->getType()->getElementType();
+  unsigned Alignment = I->getAlignment();
+  bool IsOveraligned = Alignment && Alignment > TD->getABITypeAlignment(ElTy);
+  if (IsOveraligned) {
+    headerUseMsAlign();
+    Out << "__MSALIGN__(" << Alignment << ") ";
+  }
+  printTypeName(Out, ElTy, false) << ' ' << GetValueName(I);
+  if (IsOveraligned)
+    Out << " __attribute__((aligned(" << Alignment << ")))";
+
+  if (I->hasLinkOnceLinkage())
+    Out << " __attribute__((common))";
+  else if (I->hasWeakLinkage()) {
+    headerUseAttributeWeak();
+    Out << " __ATTRIBUTE_WEAK__";
+  } else if (I->hasCommonLinkage()) {
+    headerUseAttributeWeak();
+    Out << " __ATTRIBUTE_WEAK__";
+  }
+
+  if (I->hasHiddenVisibility()) {
+    headerUseHidden();
+    Out << " __HIDDEN__";
+  }
+
+  // If the initializer is not null, emit the initializer.  If it is null,
+  // we try to avoid emitting large amounts of zeros.  The problem with
+  // this, however, occurs when the variable has weak linkage.  In this
+  // case, the assembler will complain about the variable being both weak
+  // and common, so we disable this optimization.
+  // FIXME common linkage should avoid this problem.
+  if (!I->getInitializer()->isNullValue()) {
+    Out << " = ";
+    writeOperand(I->getInitializer(), ContextStatic);
+  } else if (I->hasWeakLinkage()) {
+    // We have to specify an initializer, but it doesn't have to be
+    // complete.  If the value is an aggregate, print out { 0 }, and let
+    // the compiler figure out the rest of the zeros.
+    Out << " = ";
+    if (I->getInitializer()->getType()->isStructTy() ||
+        I->getInitializer()->getType()->isVectorTy()) {
+      Out << "{ 0 }";
+    } else if (I->getInitializer()->getType()->isArrayTy()) {
+      // As with structs and vectors, but with an extra set of braces
+      // because arrays are wrapped in structs.
+      Out << "{ { 0 } }";
+    } else {
+      // Just print it out normally.
+      writeOperand(I->getInitializer(), ContextStatic);
+    }
+  }
+  Out << ";\n";
+}
+
 /// Output all floating point constants that cannot be printed accurately...
 void CWriter::printFloatingPointConstants(Function &F) {
   // Scan the module for floating point constants.  If any FP constant is used
@@ -2088,6 +2505,98 @@ static void defineBitCastUnion(raw_ostream &Out) {
   Out << "} llvmBitCastUnion;\n";
 }
 
+/// printSymbolTable - Run through symbol table looking for type names.  If a
+/// type name is found, emit its declaration...
+void CWriter::printModuleTypes(raw_ostream &Out) {
+  if (headerIncBitCastUnion()) {
+    defineBitCastUnion(Out);
+  }
+
+  // Keep track of which types have been printed so far.
+  std::set<Type *> TypesPrinted;
+
+  // Loop over all structures then push them into the stack so they are
+  // printed in the correct order.
+  Out << "\n/* Types Declarations */\n";
+
+  // forward-declare all structs here first
+
+  {
+    std::set<Type *> TypesPrinted;
+    for (auto it = TypedefDeclTypes.begin(), end = TypedefDeclTypes.end();
+         it != end; ++it) {
+      forwardDeclareStructs(Out, *it, TypesPrinted);
+    }
+  }
+
+  Out << "\n/* Function definitions */\n";
+
+  struct FunctionDefinition {
+    FunctionType *FT;
+    std::vector<FunctionType *> Dependencies;
+    std::string NameToPrint;
+  };
+
+  std::vector<FunctionDefinition> FunctionTypeDefinitions;
+  // Copy Function Types into indexable container
+  for (auto &I : UnnamedFunctionIDs) {
+    const auto &F = I.first;
+    FunctionType *FT = F.first;
+    std::vector<FunctionType *> FDeps;
+    for (const auto P : F.first->params()) {
+      if (P->isPointerTy()) {
+        PointerType *PP = dyn_cast<PointerType>(P);
+        if (PP->getElementType()->isFunctionTy()) {
+          FDeps.push_back(dyn_cast<FunctionType>(PP->getElementType()));
+        }
+      }
+    }
+    std::string DeclString;
+    raw_string_ostream TmpOut(DeclString);
+    printFunctionDeclaration(TmpOut, F.first, F.second);
+    TmpOut.flush();
+    FunctionTypeDefinitions.emplace_back(
+        FunctionDefinition{FT, FDeps, DeclString});
+  }
+
+  // Sort function types
+  TopologicalSorter Sorter(FunctionTypeDefinitions.size());
+  DenseMap<FunctionType *, int> TopologicalSortMap;
+  // Add Vertices
+  for (unsigned I = 0; I < FunctionTypeDefinitions.size(); I++) {
+    TopologicalSortMap[FunctionTypeDefinitions[I].FT] = I;
+  }
+  // Add Edges
+  for (unsigned I = 0; I < FunctionTypeDefinitions.size(); I++) {
+    const auto &Dependencies = FunctionTypeDefinitions[I].Dependencies;
+    for (unsigned J = 0; J < Dependencies.size(); J++) {
+      Sorter.addEdge(I, TopologicalSortMap[Dependencies[J]]);
+    }
+  }
+  Optional<std::vector<int>> TopologicalSortResult = Sorter.sort();
+  if (!TopologicalSortResult.hasValue()) {
+    errorWithMessage("Cyclic dependencies in function definitions");
+  }
+  for (const auto I : TopologicalSortResult.getValue()) {
+    Out << FunctionTypeDefinitions[I].NameToPrint << "\n";
+  }
+
+  // We may have collected some intrinsic prototypes to emit.
+  // Emit them now, before the function that uses them is emitted
+  for (auto &F : prototypesToGen) {
+    Out << '\n';
+    printFunctionProto(Out, F);
+    Out << ";\n";
+  }
+
+  Out << "\n/* Types Definitions */\n";
+
+  for (auto it = TypedefDeclTypes.begin(), end = TypedefDeclTypes.end();
+       it != end; ++it) {
+    printContainedTypes(Out, *it, TypesPrinted);
+  }
+}
+
 void CWriter::forwardDeclareStructs(raw_ostream &Out, Type *Ty,
                                     std::set<Type *> &TypesPrinted) {
   if (!TypesPrinted.insert(Ty).second)
@@ -2141,13 +2650,8 @@ static inline bool isFPIntBitCast(Instruction &I) {
          (DstTy->isFloatingPointTy() && SrcTy->isIntegerTy());
 }
 
-void CWriter::printFunction(Function &F, llvm::LoopInfo *LI, const llvm::DataLayout *TD) {
+void CWriter::printFunction(Function &F, llvm::LoopInfo *LI) {
   this->LI = LI;
-  this->TD = TD;
-  if (this->IL != nullptr) {
-    delete this->IL;
-  }
-  this->IL = new IntrinsicLowering(*TD);
 
   /// isStructReturn - Should this function actually return a struct by-value?
   bool isStructReturn = F.hasStructRetAttr();

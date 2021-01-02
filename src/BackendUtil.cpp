@@ -945,8 +945,9 @@ void EmitAssemblyHelper::EmitAssemblyWithNewPassManager(std::unique_ptr<raw_pwri
   // MPM.addPass(createModuleToFunctionPassAdaptor(PromotePass()));
 
   // Append any output we need to the pass manager.
-  MPM.addPass(c2ssa::PrintGlobalsPass(*OS, "", CodeGenOpts.EmitLLVMUseLists));
-  MPM.addPass(createModuleToFunctionPassAdaptor(c2ssa::PrintFunctionPass(*OS, "", CodeGenOpts.EmitLLVMUseLists)));
+  // MPM.addPass(c2ssa::PrintGlobalsPass(*OS, "", CodeGenOpts.EmitLLVMUseLists));
+  // MPM.addPass(createModuleToFunctionPassAdaptor(c2ssa::PrintFunctionPass(*OS, "", CodeGenOpts.EmitLLVMUseLists)));
+  MPM.addPass(c2ssa::PrintModulePass(*OS, ""));
 
   // Before executing passes, print the final values of the LLVM options.
   cl::PrintOptionValues();

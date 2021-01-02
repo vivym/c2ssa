@@ -32,6 +32,7 @@ private:
   using raw_ostream = llvm::raw_ostream;
   
   raw_ostream &Out;
+  raw_ostream &OutHeaders;
   llvm::IntrinsicLowering *IL = nullptr;
   llvm::LoopInfo *LI = nullptr;
   const llvm::DataLayout *TD = nullptr;
@@ -116,14 +117,15 @@ private:
   void generateCompilerSpecificCode(raw_ostream &Out, const DataLayout *) const;
   
 public:
-  explicit CWriter(llvm::raw_ostream &Out): Out(Out) {
+  explicit CWriter(llvm::raw_ostream &Out, llvm::raw_ostream &OutHeaders, const llvm::DataLayout *TD):
+  Out(Out), OutHeaders(OutHeaders), TD(TD), IL(new IntrinsicLowering(*TD)) {
     memset(&UsedHeaders, 0, sizeof(UsedHeaders));
   }
   
-  void printFunction(llvm::Function &, llvm::LoopInfo *, const llvm::DataLayout *);
+  void printFunction(llvm::Function &, llvm::LoopInfo *);
+  void generateHeader(Module &M);
   
 private:
-  void generateHeader(Module &M);
   void declareOneGlobalVariable(GlobalVariable *I);
 
   void forwardDeclareStructs(raw_ostream &Out, Type *Ty,

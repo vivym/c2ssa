@@ -25,31 +25,99 @@
 using namespace llvm;
 using namespace c2ssa;
 
-PrintFunctionPass::PrintFunctionPass(raw_ostream &OS, CWriter &writer, const std::string &Banner,
-                                     bool ShouldPreserveUseListOrder)
-    : OS(OS), writer(writer), Banner(Banner),
-      ShouldPreserveUseListOrder(ShouldPreserveUseListOrder) {}
+PrintFunctionPass::PrintFunctionPass(CWriter &writer)
+    : writer(writer) {}
 
 PreservedAnalyses PrintFunctionPass::run(Function &F, FunctionAnalysisManager &AM) {
-  if (!Banner.empty())
-    OS << Banner << "\n";
-
   auto &LI = AM.getResult<LoopAnalysis>(F);
-  auto TD = new DataLayout(F.getParent());
-  // CWriter writer(OS, F, &LI, TD);
   writer.printFunction(F, &LI);
 
   return PreservedAnalyses::all();
 }
 
-PrintGlobalsPass::PrintGlobalsPass(raw_ostream &OS, CWriter &writer, const std::string &Banner,
-                                     bool ShouldPreserveUseListOrder)
-    : OS(OS), writer(writer), Banner(Banner),
-      ShouldPreserveUseListOrder(ShouldPreserveUseListOrder) {}
+PrintGlobalsPass::PrintGlobalsPass(CWriter &writer)
+    : writer(writer) {}
 
 PreservedAnalyses PrintGlobalsPass::run(Module &M, ModuleAnalysisManager &AM) {
-  if (!Banner.empty())
-    OS << Banner << "\n";
 
   return PreservedAnalyses::all();
+}
+
+PrintModulePass::PrintModulePass(raw_ostream &OS, const std::string &Banner)
+    : OS(OS), Banner(Banner) {}
+
+PreservedAnalyses PrintModulePass::run(Module &M, ModuleAnalysisManager &AM) {
+  std::string OutStr;
+  std::string OutHeadersStr;
+  raw_string_ostream Out(OutStr);
+  raw_string_ostream OutHeaders(OutHeadersStr);
+  
+  if (!Banner.empty())
+    OS << Banner << "\n";
+  
+  FunctionAnalysisManager &FAM =
+      AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
+ 
+  // Request PassInstrumentation from analysis manager, will use it to run
+  // instrumenting callbacks for the passes later.
+  PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(M);
+
+  const llvm::DataLayout *TD = new DataLayout(&M);
+  CWriter writer(Out, OutHeaders, TD);
+  
+  using PassModelT =
+      detail::PassModel<Function, PrintFunctionPass, PreservedAnalyses,
+                        FunctionAnalysisManager>;
+  auto FunctionPass = std::make_unique<PassModelT>(PrintFunctionPass(writer));
+  
+  PreservedAnalyses PA = PreservedAnalyses::all();
+  for (Function &F : M) {
+    if (F.isDeclaration())
+      continue;
+    
+    // Check the PassInstrumentation's BeforePass callbacks before running the
+    // pass, skip its execution completely if asked to (callback returns
+    // false).
+    if (!PI.runBeforePass<Function>(*FunctionPass, F))
+      continue;
+    
+    PreservedAnalyses PassPA;
+    {
+      TimeTraceScope TimeScope(FunctionPass->name(), F.getName());
+      PassPA = FunctionPass->run(F, FAM);
+    }
+    
+    PI.runAfterPass(*FunctionPass, F, PassPA);
+    
+    // We know that the function pass couldn't have invalidated any other
+    // function's analyses (that's the contract of a function pass), so
+    // directly handle the function analysis manager's invalidation here.
+    FAM.invalidate(F, PassPA);
+
+    // Then intersect the preserved set so that invalidation of module
+    // analyses will eventually occur when the module pass completes.
+    PA.intersect(std::move(PassPA));
+    
+    auto &LI = FAM.getResult<LoopAnalysis>(F);
+  }
+
+  // The FunctionAnalysisManagerModuleProxy is preserved because (we assume)
+  // the function passes we ran didn't add or remove any functions.
+  //
+  // We also preserve all analyses on Functions, because we did all the
+  // invalidation we needed to do above.
+  PA.preserveSet<AllAnalysesOn<Function>>();
+  PA.preserve<FunctionAnalysisManagerModuleProxy>();
+  
+  std::string methods = Out.str();
+  OutStr.clear();
+  writer.generateHeader(M);
+  std::string headers = OutHeaders.str() + Out.str();
+  OutStr.clear();
+  OutHeadersStr.clear();
+  OS << headers << methods;
+  
+  delete TD;
+  
+  return PA;
 }

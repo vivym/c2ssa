@@ -19,6 +19,7 @@ set(HEADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/include/CodeGenAction.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/IDMap.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/PrintingPass.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/TopologicalSorter.h
 )
 
 set(CPPS
@@ -27,6 +28,7 @@ set(CPPS
   ${CMAKE_CURRENT_SOURCE_DIR}/src/CBackend.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/CodeGenAction.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/PrintingPass.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/TopologicalSorter.cpp
 )
 
 # Now build our tools
