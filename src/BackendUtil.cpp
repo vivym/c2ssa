@@ -73,7 +73,7 @@
 #include "llvm/Transforms/IPO/MergeFunctions.h"
 #include "llvm/Transforms/IPO/OpenMPOpt.h"
 #include "llvm/Transforms/IPO/PartialInlining.h"
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
+// #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/IPO/SCCP.h"
 #include "llvm/Transforms/IPO/SampleProfile.h"
 #include "llvm/Transforms/IPO/SampleProfileProbe.h"
@@ -198,7 +198,9 @@
 #include "llvm/IR/IRPrintingPasses.h"
 #include "PrintingPass.h"
 #include "LoopUnrollPass.h"
+#include "PassManagerBuilder.h"
 #include <memory>
+#include <sstream>
 using namespace clang;
 using namespace llvm;
 using namespace c2ssa;
@@ -274,7 +276,7 @@ public:
 
 // We need this wrapper to access LangOpts and CGOpts from extension functions
 // that we add to the PassManagerBuilder.
-class PassManagerBuilderWrapper : public PassManagerBuilder {
+class PassManagerBuilderWrapper : public c2ssa::PassManagerBuilder {
 public:
   PassManagerBuilderWrapper(const Triple &TargetTriple,
                             const CodeGenOptions &CGOpts,
@@ -313,7 +315,7 @@ getSancovOptsFromCGOpts(const CodeGenOptions &CGOpts) {
   return Opts;
 }
 
-static void addSanitizerCoveragePass(const PassManagerBuilder &Builder,
+static void addSanitizerCoveragePass(const c2ssa::PassManagerBuilder &Builder,
                                      legacy::PassManagerBase &PM) {
   const PassManagerBuilderWrapper &BuilderWrapper =
       static_cast<const PassManagerBuilderWrapper &>(Builder);
@@ -635,8 +637,11 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
 
   MPM.add(new TargetLibraryInfoWrapperPass(*TLII));
 
+  /// TODO:
+  /*
   if (TM)
     TM->adjustPassManager(PMBuilder);
+  */
 
   // Set up the per-function pass manager.
   FPM.add(new TargetLibraryInfoWrapperPass(*TLII));
@@ -707,6 +712,13 @@ static void setCommandLineOpts(const CodeGenOptions &CodeGenOpts) {
     BackendArgs.push_back("-limit-float-precision");
     BackendArgs.push_back(CodeGenOpts.LimitFloatPrecision.c_str());
   }
+  std::stringstream ss;
+  ss << std::numeric_limits<unsigned>::max();
+  std::string maxStr = ss.str();
+  BackendArgs.push_back("-unroll-threshold-aggressive");
+  BackendArgs.push_back(maxStr.c_str());
+  BackendArgs.push_back("-unroll-threshold-default");
+  BackendArgs.push_back(maxStr.c_str());
   BackendArgs.push_back(nullptr);
   llvm::cl::ParseCommandLineOptions(BackendArgs.size() - 1,
                                     BackendArgs.data());

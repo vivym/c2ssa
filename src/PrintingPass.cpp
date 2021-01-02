@@ -128,28 +128,6 @@ PreservedAnalyses PrintModulePass::run(Module &M, ModuleAnalysisManager &AM) {
 
 namespace {
 
-class C2SSAPrintModulePassWrapper : public ModulePass {
-  c2ssa::PrintModulePass P;
-
-public:
-  static char ID;
-  C2SSAPrintModulePassWrapper() : ModulePass(ID) {}
-  C2SSAPrintModulePassWrapper(raw_ostream &OS, const std::string &Banner)
-      : ModulePass(ID), P(OS, Banner) {}
-
-  bool runOnModule(Module &M) override {
-    ModuleAnalysisManager DummyMAM;
-    P.run(M, DummyMAM);
-    return false;
-  }
-
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.setPreservesAll();
-  }
-
-  StringRef getPassName() const override { return "Print Module IR"; }
-};
-
 class C2SSAPrintModulePass : public FunctionPass {
   CWriter *writer = nullptr;
   raw_ostream &OS;
@@ -211,22 +189,6 @@ public:
 };
 
 }
-
-char C2SSAPrintModulePassWrapper::ID = 0;
-/*
-static void *initializeC2SSAPrintModulePassWrapperPassOnce(PassRegistry &Registry) {
-  PassInfo *PI = new PassInfo(
-      "Print module to stderr", "c2ssa-print-module", &C2SSAPrintModulePassWrapper::ID,
-      PassInfo::NormalCtor_t(callDefaultCtor<C2SSAPrintModulePassWrapper>), true, true);
-  Registry.registerPass(*PI, true);
-  return PI;
-}
-static llvm::once_flag InitializeC2SSAPrintModulePassWrapperPassFlag;
-void initializeC2SSAPrintModulePass(PassRegistry &Registry) {
-  llvm::call_once(InitializeC2SSAPrintModulePassWrapperPassFlag,
-                  initializeC2SSAPrintModulePassWrapperPassOnce, std::ref(Registry));
-}
-*/
 
 char C2SSAPrintModulePass::ID = 0;
 static void *initializeC2SSAPrintModulePassOnce(PassRegistry &Registry) {

@@ -21,6 +21,7 @@ set(HEADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/include/PrintingPass.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/TopologicalSorter.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/LoopUnrollPass.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/PassManagerBuilder.h
 )
 
 set(CPPS
@@ -31,6 +32,7 @@ set(CPPS
   ${CMAKE_CURRENT_SOURCE_DIR}/src/PrintingPass.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/TopologicalSorter.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/LoopUnrollPass.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/PassManagerBuilder.cpp
 )
 
 # Now build our tools
