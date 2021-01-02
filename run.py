@@ -2,11 +2,12 @@ import re
 import os
 import sys
 import subprocess
+import argparse
 
 
 def get_include_paths(source_filename):
     ret = subprocess.run(
-        ["clang", "-v", "-o", "/dev/null", source_filename],
+        ["gcc", "-v", "-o", "/dev/null", source_filename],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT
     )
@@ -28,10 +29,10 @@ def get_include_paths(source_filename):
     return paths
 
 
-def main():
-    source_filename = sys.argv[1]
+def main(args):
+    src = args.src
 
-    include_paths = get_include_paths(source_filename)
+    include_paths = get_include_paths(src)
 
     root_dir = os.path.dirname(sys.argv[0])
     build_dir = os.path.join(root_dir, "build")
@@ -43,7 +44,7 @@ def main():
 
     os.putenv("C_INCLUDE_PATH", ":".join(include_paths))
     subprocess.call(
-        f"\"{os.path.join(build_dir, 'c2ssa')}\" {source_filename}",
+        f"\"{os.path.join(build_dir, 'c2ssa')}\" {src}",
         shell=True
     )
 
@@ -51,4 +52,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("src", type=str, help="c soruce file.")
+
+    main(parser.parse_args())

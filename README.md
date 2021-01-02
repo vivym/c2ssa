@@ -24,5 +24,5 @@ make
 ## 3. Run C2SSA
 
 ```bash
-./c2ssa xx.c
+python run.py xx.c
 ```
