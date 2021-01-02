@@ -519,6 +519,8 @@ raw_ostream &CWriter::printFunctionAttributes(raw_ostream &Out,
     }
   }
   if (!AttrsToPrint.empty()) {
+    /// TODO:
+    /*
     headerUseAttributeList();
     Out << " __ATTRIBUTELIST__((";
     bool DidPrintAttr = false;
@@ -529,6 +531,7 @@ raw_ostream &CWriter::printFunctionAttributes(raw_ostream &Out,
       DidPrintAttr = true;
     }
     Out << "))";
+    */
   }
   return Out;
 }
@@ -613,6 +616,9 @@ CWriter::printFunctionProto(raw_ostream &Out, FunctionType *FTy,
     }
     if (PrintedArg)
       Out << ", ";
+    if (PAL.hasAttribute(Idx, Attribute::AttrKind::ReadOnly)) {
+      Out << "const ";
+    }
     printTypeNameUnaligned(Out, ArgTy,
                            /*isSigned=*/PAL.hasAttribute(Idx, Attribute::SExt));
     PrintedArg = true;
@@ -1396,7 +1402,7 @@ std::string CWriter::GetValueName(Value *Operand) {
       VarName += ch;
   }
 
-  return VarName;
+  return "c2ssa_" + VarName;
 }
 
 /// writeInstComputationInline - Emit the computation for the specified
@@ -2268,9 +2274,11 @@ void CWriter::generateHeader(Module &M) {
     }
   }
   
-  Out << "\n\n/* LLVM Intrinsic Builtin Function Bodies */\n";
-
+  /// TODO:
+  // Out << "\n\n/* LLVM Intrinsic Builtin Function Bodies */\n";
+  
   // Loop over all select operations
+  /*
   if (!SelectDeclTypes.empty())
     headerUseForceInline();
   for (std::set<Type *>::iterator it = SelectDeclTypes.begin(),
@@ -2291,8 +2299,6 @@ void CWriter::generateHeader(Module &M) {
     Out << " llvm_select_";
     printTypeString(Out, *it, false);
     Out << "(";
-    /// TODO:
-    /*
     if (isa<VectorType>(*it))
       printTypeNameUnaligned(
           Out,
@@ -2301,8 +2307,7 @@ void CWriter::generateHeader(Module &M) {
           false);
     else
       Out << "bool";
-    */
-    Out << "bool";
+
     Out << " condition, ";
     printTypeNameUnaligned(Out, *it, false);
     Out << " iftrue, ";
@@ -2310,8 +2315,6 @@ void CWriter::generateHeader(Module &M) {
     Out << " ifnot) {\n  ";
     printTypeNameUnaligned(Out, *it, false);
     Out << " r;\n";
-    /// TODO:
-    /*
     if (isa<VectorType>(*it)) {
       unsigned n, l = (*it)->getVectorNumElements();
       for (n = 0; n < l; n++) {
@@ -2321,10 +2324,9 @@ void CWriter::generateHeader(Module &M) {
     } else {
       Out << "  r = condition ? iftrue : ifnot;\n";
     }
-    */
-    Out << "  r = condition ? iftrue : ifnot;\n";
     Out << "  return r;\n}\n";
   }
+  */
   
   // Loop over all compare operations
   if (!CmpDeclTypes.empty())
@@ -2378,6 +2380,9 @@ void CWriter::declareOneGlobalVariable(GlobalVariable *I) {
   if (IsOveraligned) {
     headerUseMsAlign();
     Out << "__MSALIGN__(" << Alignment << ") ";
+  }
+  if (isa<Constant>(I)) {
+    Out << "const ";
   }
   printTypeName(Out, ElTy, false) << ' ' << GetValueName(I);
   if (IsOveraligned)

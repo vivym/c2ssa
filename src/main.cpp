@@ -27,18 +27,18 @@ static llvm::cl::extrahelp MoreHelp("\nMore help text...\n");
 */
 
 int main(int argc, const char **argv) {
-    // clang::tooling::CommonOptionsParser OptionsParser(argc, argv, C11SSACategory);
-    std::vector<const char *> CommandLine;
-    std::vector<std::string> StrippedArgs;
-    std::unique_ptr<clang::tooling::CompilationDatabase> Compilations = std::make_unique<clang::tooling::FixedCompilationDatabase>(".", StrippedArgs);
-    if (argc != 2) {
-        return -1;
-    }
-    std::vector<std::string> SourcePathList(argv + 1, argv + 2);
-    clang::tooling::ClangTool Tool(
-        *Compilations,
-        SourcePathList
-    );
+  // clang::tooling::CommonOptionsParser OptionsParser(argc, argv, C11SSACategory);
+  std::vector<const char *> CommandLine;
+  std::vector<std::string> StrippedArgs;
+  std::unique_ptr<clang::tooling::CompilationDatabase> Compilations = std::make_unique<clang::tooling::FixedCompilationDatabase>(".", StrippedArgs);
+  if (argc != 2) {
+      return -1;
+  }
+  std::vector<std::string> SourcePathList(argv + 1, argv + 2);
+  clang::tooling::ClangTool Tool(
+      *Compilations,
+      SourcePathList
+  );
 
-    return Tool.run(clang::tooling::newFrontendActionFactory<c2ssa::CodeGenAction>().get());
+  return Tool.run(clang::tooling::newFrontendActionFactory<c2ssa::CodeGenAction>().get());
 }

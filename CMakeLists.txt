@@ -20,6 +20,7 @@ set(HEADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/include/IDMap.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/PrintingPass.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/TopologicalSorter.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/LoopUnrollPass.h
 )
 
 set(CPPS
@@ -29,6 +30,7 @@ set(CPPS
   ${CMAKE_CURRENT_SOURCE_DIR}/src/CodeGenAction.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/PrintingPass.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/TopologicalSorter.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/LoopUnrollPass.cpp
 )
 
 # Now build our tools

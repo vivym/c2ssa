@@ -63,7 +63,8 @@ PreservedAnalyses PrintModulePass::run(Module &M, ModuleAnalysisManager &AM) {
   PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(M);
 
   const llvm::DataLayout *TD = new DataLayout(&M);
-  CWriter writer(Out, OutHeaders, TD);
+  llvm::IntrinsicLowering *IL = new IntrinsicLowering(*TD);
+  CWriter writer(Out, OutHeaders, &M, TD, IL);
   
   using PassModelT =
       detail::PassModel<Function, PrintFunctionPass, PreservedAnalyses,
@@ -118,6 +119,7 @@ PreservedAnalyses PrintModulePass::run(Module &M, ModuleAnalysisManager &AM) {
   OS << headers << methods;
   
   delete TD;
+  delete IL;
   
   return PA;
 }

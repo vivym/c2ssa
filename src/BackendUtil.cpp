@@ -134,7 +134,7 @@
 #include "llvm/Transforms/Scalar/LoopSink.h"
 #include "llvm/Transforms/Scalar/LoopStrengthReduce.h"
 #include "llvm/Transforms/Scalar/LoopUnrollAndJamPass.h"
-#include "llvm/Transforms/Scalar/LoopUnrollPass.h"
+// #include "llvm/Transforms/Scalar/LoopUnrollPass.h"
 #include "llvm/Transforms/Scalar/LoopVersioningLICM.h"
 #include "llvm/Transforms/Scalar/LowerAtomic.h"
 #include "llvm/Transforms/Scalar/LowerConstantIntrinsics.h"
@@ -196,6 +196,7 @@
 #include "llvm/Transforms/Vectorize/SLPVectorizer.h"
 #include "llvm/Transforms/Vectorize/VectorCombine.h"
 #include "PrintingPass.h"
+#include "LoopUnrollPass.h"
 #include <memory>
 using namespace clang;
 using namespace llvm;
@@ -796,7 +797,7 @@ static ModulePassManager buildModuleOptimizationPipeline(PassBuilder::Optimizati
   
   OptimizePM.addPass(LoopUnrollAndJamPass(Level.getSpeedupLevel()));
   
-  OptimizePM.addPass(LoopUnrollPass(LoopUnrollOptions(
+  OptimizePM.addPass(c2ssa::LoopUnrollPass(c2ssa::LoopUnrollOptions(
       Level.getSpeedupLevel(), /*OnlyWhenForced=*/false,
       false)));
   OptimizePM.addPass(WarnMissedTransformationsPass());
