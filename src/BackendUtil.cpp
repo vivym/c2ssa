@@ -199,6 +199,7 @@
 #include "PrintingPass.h"
 #include "LoopUnrollPass.h"
 #include "PassManagerBuilder.h"
+#include "CallGraph.h"
 #include <memory>
 #include <sstream>
 using namespace clang;
@@ -776,6 +777,7 @@ void EmitAssemblyHelper::EmitAssembly(std::unique_ptr<raw_pwrite_stream> OS) {
   CodeGenPasses.add(
       createTargetTransformInfoWrapperPass(getTargetIRAnalysis()));
   
+  PerModulePasses.add(new c2ssa::CallGraphCounter(*OS));
   legacy::FunctionPassManager PrintPasses(TheModule);
   PrintPasses.add(
       c2ssa::createPrintModulePass(*OS, ""));
