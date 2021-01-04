@@ -25,4 +25,6 @@ make
 
 ```bash
 python run.py xx.c
+
+python run.py xx.c --verify
 ```
