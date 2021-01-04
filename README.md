@@ -17,7 +17,7 @@ git clone https://github.com/vivym/c2ssa.git
 cd c2ssa
 mkdir build
 cd build
-cmake -DLLVM_ROOT_DIR=/Users/viv/Proj/llvm-project ..
+cmake -DLLVM_ROOT_DIR=/path/to/llvm-project ..
 make
 ```
 
