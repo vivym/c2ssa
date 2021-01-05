@@ -1055,7 +1055,7 @@ void CWriter::printConstant(Constant *CPV, enum OperandContext Context) {
       printTypeString(Out, VT, false);
       Out << "(";
       Constant *Zero = Constant::getNullValue(VT->getElementType());
-      unsigned NumElts = VT->getNumElements();
+      unsigned NumElts = VT->getElementCount().getKnownMinValue();
       for (unsigned i = 0; i != NumElts; ++i) {
         if (i)
           Out << ", ";
@@ -3001,57 +3001,6 @@ void CWriter::visitBinaryOperator(BinaryOperator &I) {
   // binary instructions, shift instructions, setCond instructions.
   cwriter_assert(!I.getType()->isPointerTy());
 
-  // We must cast the results of binary operations which might be promoted.
-  bool needsCast = false;
-  if ((I.getType() == Type::getInt8Ty(I.getContext())) ||
-      (I.getType() == Type::getInt16Ty(I.getContext())) ||
-      (I.getType() == Type::getFloatTy(I.getContext()))) {
-    // types too small to work with directly
-    needsCast = true;
-  } else if (I.getType()->getPrimitiveSizeInBits() > 64) {
-    // types too big to work with directly
-    needsCast = true;
-  }
-  bool shouldCast;
-  bool castIsSigned;
-  opcodeNeedsCast(I.getOpcode(), shouldCast, castIsSigned);
-
-  if (I.getType()->isVectorTy() || needsCast || shouldCast) {
-    Type *VTy = I.getOperand(0)->getType();
-    unsigned opcode;
-    Value *X;
-    if (match(&I, m_Neg(m_Value(X)))) {
-      opcode = BinaryNeg;
-      Out << "llvm_neg_";
-      printTypeString(Out, VTy, false);
-      Out << "(";
-      writeOperand(X, ContextCasted);
-    } else if (match(&I, m_FNeg(m_Value(X)))) {
-      opcode = BinaryNeg;
-      Out << "llvm_neg_";
-      printTypeString(Out, VTy, false);
-      Out << "(";
-      writeOperand(X, ContextCasted);
-    } else if (match(&I, m_Not(m_Value(X)))) {
-      opcode = BinaryNot;
-      Out << "llvm_not_";
-      printTypeString(Out, VTy, false);
-      Out << "(";
-      writeOperand(X, ContextCasted);
-    } else {
-      opcode = I.getOpcode();
-      Out << "llvm_" << Instruction::getOpcodeName(opcode) << "_";
-      printTypeString(Out, VTy, false);
-      Out << "(";
-      writeOperand(I.getOperand(0), ContextCasted);
-      Out << ", ";
-      writeOperand(I.getOperand(1), ContextCasted);
-    }
-    Out << ")";
-    InlineOpDeclTypes.insert(std::pair<unsigned, Type *>(opcode, VTy));
-    return;
-  }
-
   // If this is a negation operation, print it out as such.  For FP, we don't
   // want to print "-0.0 - X".
   Value *X;
@@ -3080,13 +3029,6 @@ void CWriter::visitBinaryOperator(BinaryOperator &I) {
     writeOperand(I.getOperand(1), ContextCasted);
     Out << ")";
   } else {
-
-    // Write out the cast of the instruction's value back to the proper type
-    // if necessary.
-    /// TODO:
-    // bool NeedsClosingParens = writeInstructionCast(I);
-    bool NeedsClosingParens = false;
-
     // Certain instructions require the operand to be forced to a specific type
     // so we use writeOperandWithCast here instead of writeOperand. Similarly
     // below for operand 1
@@ -3136,8 +3078,6 @@ void CWriter::visitBinaryOperator(BinaryOperator &I) {
     }
 
     writeOperandWithCast(I.getOperand(1), I.getOpcode());
-    if (NeedsClosingParens)
-      Out << "))";
   }
 }
 
@@ -3310,17 +3250,6 @@ void CWriter::visitCastInst(CastInst &I) {
 void CWriter::visitSelectInst(SelectInst &I) {
   CurInstr = &I;
 
-  /*
-  Out << "llvm_select_";
-  printTypeString(Out, I.getType(), false);
-  Out << "(";
-  writeOperand(I.getCondition(), ContextCasted);
-  Out << ", ";
-  writeOperand(I.getTrueValue(), ContextCasted);
-  Out << ", ";
-  writeOperand(I.getFalseValue(), ContextCasted);
-  Out << ")";
-  */
   Out << "(";
   writeOperand(I.getCondition(), ContextCasted);
   Out << " ? ";
@@ -3624,12 +3553,6 @@ bool CWriter::lowerIntrinsics(Function &F) {
           case Intrinsic::returnaddress:
           case Intrinsic::frameaddress:
           case Intrinsic::prefetch:
-          /// TODO:
-          // case Intrinsic::x86_sse_cmp_ss:
-          // case Intrinsic::x86_sse_cmp_ps:
-          // case Intrinsic::x86_sse2_cmp_sd:
-          // case Intrinsic::x86_sse2_cmp_pd:
-          // case Intrinsic::ppc_altivec_lvsl:
           case Intrinsic::uadd_with_overflow:
           case Intrinsic::sadd_with_overflow:
           case Intrinsic::usub_with_overflow:
@@ -3913,67 +3836,6 @@ bool CWriter::visitBuiltinCall(CallInst &I, Intrinsic::ID ID) {
     headerUseStackSaveRestore();
     Out << "0; *((void**)&" << GetValueName(&I) << ") = __builtin_stack_save()";
     return true;
-  /*
-  case Intrinsic::x86_sse_cmp_ss:
-  case Intrinsic::x86_sse_cmp_ps:
-  case Intrinsic::x86_sse2_cmp_sd:
-  case Intrinsic::x86_sse2_cmp_pd:
-    Out << '(';
-    printTypeName(Out, I.getType());
-    Out << ')';
-    // Multiple GCC builtins multiplex onto this intrinsic.
-    switch (cast<ConstantInt>(I.getArgOperand(2))->getZExtValue()) {
-    default:
-      errorWithMessage("Invalid llvm.x86.sse.cmp!");
-    case 0:
-      Out << "__builtin_ia32_cmpeq";
-      break;
-    case 1:
-      Out << "__builtin_ia32_cmplt";
-      break;
-    case 2:
-      Out << "__builtin_ia32_cmple";
-      break;
-    case 3:
-      Out << "__builtin_ia32_cmpunord";
-      break;
-    case 4:
-      Out << "__builtin_ia32_cmpneq";
-      break;
-    case 5:
-      Out << "__builtin_ia32_cmpnlt";
-      break;
-    case 6:
-      Out << "__builtin_ia32_cmpnle";
-      break;
-    case 7:
-      Out << "__builtin_ia32_cmpord";
-      break;
-    }
-    if (ID == Intrinsic::x86_sse_cmp_ps || ID == Intrinsic::x86_sse2_cmp_pd)
-      Out << 'p';
-    else
-      Out << 's';
-    if (ID == Intrinsic::x86_sse_cmp_ss || ID == Intrinsic::x86_sse_cmp_ps)
-      Out << 's';
-    else
-      Out << 'd';
-
-    Out << "(";
-    writeOperand(I.getArgOperand(0), ContextCasted);
-    Out << ", ";
-    writeOperand(I.getArgOperand(1), ContextCasted);
-    Out << ")";
-    return true;
-  case Intrinsic::ppc_altivec_lvsl:
-    Out << '(';
-    printTypeName(Out, I.getType());
-    Out << ')';
-    Out << "__builtin_altivec_lvsl(0, (void*)";
-    writeOperand(I.getArgOperand(0), ContextCasted);
-    Out << ")";
-    return true;
-   */
   case Intrinsic::stackprotector:
     writeOperandDeref(I.getArgOperand(1));
     Out << " = ";
@@ -4277,8 +4139,8 @@ void CWriter::visitShuffleVectorInst(ShuffleVectorInst &SVI) {
   Out << "(";
 
   Constant *Zero = Constant::getNullValue(EltTy);
-  unsigned NumElts = VT->getNumElements();
-  unsigned NumInputElts = InputVT->getNumElements(); // n
+  unsigned NumElts = VT->getElementCount().getKnownMinValue();
+  unsigned NumInputElts = InputVT->getElementCount().getKnownMinValue(); // n
   for (unsigned i = 0; i != NumElts; ++i) {
     if (i)
       Out << ", ";

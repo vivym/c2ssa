@@ -39,207 +39,88 @@ using namespace llvm;
 using namespace c2ssa;
 
 namespace {
-/*
-cl::opt<bool> RunPartialInlining("enable-partial-inlining", cl::init(false),
-                                 cl::Hidden, cl::ZeroOrMore,
-                                 cl::desc("Run Partial inlinining pass"));
-*/
+
 bool RunPartialInlining = true;
 
-/*
-static cl::opt<bool>
-UseGVNAfterVectorization("use-gvn-after-vectorization",
-  cl::init(false), cl::Hidden,
-  cl::desc("Run GVN instead of Early CSE after vectorization passes"));
-*/
+// Run GVN instead of Early CSE after vectorization passes.
 bool UseGVNAfterVectorization = false;
 
-/*
-static cl::opt<bool> ExtraVectorizerPasses(
-    "extra-vectorizer-passes", cl::init(false), cl::Hidden,
-    cl::desc("Run cleanup optimization passes after vectorization."));
-*/
+// Run cleanup optimization passes after vectorization.
 bool ExtraVectorizerPasses = false;
 
-/*
-static cl::opt<bool>
-RunLoopRerolling("reroll-loops", cl::Hidden,
-                 cl::desc("Run the loop rerolling pass"));
-*/
+// Run the loop rerolling pass.
 bool RunLoopRerolling = true;
 
-/*
-cl::opt<bool> RunNewGVN("enable-newgvn", cl::init(false), cl::Hidden,
-                        cl::desc("Run the NewGVN pass"));
-*/
+// Run the NewGVN pass.
 bool RunNewGVN = false;
 
-// Experimental option to use CFL-AA
+// Experimental option to use CFL-AA.
 enum class CFLAAType { None, Steensgaard, Andersen, Both };
-/*
-static cl::opt<CFLAAType>
-    UseCFLAA("use-cfl-aa", cl::init(CFLAAType::None), cl::Hidden,
-             cl::desc("Enable the new, experimental CFL alias analysis"),
-             cl::values(clEnumValN(CFLAAType::None, "none", "Disable CFL-AA"),
-                        clEnumValN(CFLAAType::Steensgaard, "steens",
-                                   "Enable unification-based CFL-AA"),
-                        clEnumValN(CFLAAType::Andersen, "anders",
-                                   "Enable inclusion-based CFL-AA"),
-                        clEnumValN(CFLAAType::Both, "both",
-                                   "Enable both variants of CFL-AA")));
-*/
+
+// Enable the new, experimental CFL alias analysis.
 CFLAAType UseCFLAA = CFLAAType::None;
 
-/*
-static cl::opt<bool> EnableLoopInterchange(
-    "enable-loopinterchange", cl::init(false), cl::Hidden,
-    cl::desc("Enable the new, experimental LoopInterchange Pass"));
-*/
+// Enable the new, experimental LoopInterchange Pass.
 bool EnableLoopInterchange = true;
 
-/*
-cl::opt<bool> EnableUnrollAndJam("enable-unroll-and-jam", cl::init(false),
-                                 cl::Hidden,
-                                 cl::desc("Enable Unroll And Jam Pass"));
-*/
+// Enable Unroll And Jam Pass.
 bool EnableUnrollAndJam = true;
 
-/*
-cl::opt<bool> EnableLoopFlatten("enable-loop-flatten", cl::init(false),
-                                cl::Hidden,
-                                cl::desc("Enable the LoopFlatten Pass"));
-*/
+// Enable the LoopFlatten Pass.
 bool EnableLoopFlatten = true;
 
-/*
-static cl::opt<bool>
-    EnablePrepareForThinLTO("prepare-for-thinlto", cl::init(false), cl::Hidden,
-                            cl::desc("Enable preparation for ThinLTO."));
-*/
+// Enable preparation for ThinLTO.
 bool EnablePrepareForThinLTO = false;
 
-/*
-static cl::opt<bool>
-    EnablePerformThinLTO("perform-thinlto", cl::init(false), cl::Hidden,
-                         cl::desc("Enable performing ThinLTO."));
-*/
+// Enable performing ThinLTO.
 bool EnablePerformThinLTO = false;
 
-/*
-cl::opt<bool> EnableHotColdSplit("hot-cold-split", cl::init(false),
-    cl::ZeroOrMore, cl::desc("Enable hot-cold splitting pass"));
-*/
+// Enable hot-cold splitting pass.
 bool EnableHotColdSplit = false;
 
-/*
-static cl::opt<bool> UseLoopVersioningLICM(
-    "enable-loop-versioning-licm", cl::init(false), cl::Hidden,
-    cl::desc("Enable the experimental Loop Versioning LICM pass"));
-*/
+// Enable the experimental Loop Versioning LICM pass.
 bool UseLoopVersioningLICM = true;
 
-/*
-cl::opt<bool>
-    DisablePreInliner("disable-preinline", cl::init(false), cl::Hidden,
-                      cl::desc("Disable pre-instrumentation inliner"));
-*/
+// Disable pre-instrumentation inliner.
 bool DisablePreInliner = false;
 
-/*
-cl::opt<int> PreInlineThreshold(
-    "preinline-threshold", cl::Hidden, cl::init(75), cl::ZeroOrMore,
-    cl::desc("Control the amount of inlining in pre-instrumentation inliner "
-             "(default = 75)"));
-*/
+// Control the amount of inlining in pre-instrumentation inliner.
 int PreInlineThreshold = 75;
 
-/*
-cl::opt<bool>
-    EnableGVNHoist("enable-gvn-hoist", cl::init(false), cl::ZeroOrMore,
-                   cl::desc("Enable the GVN hoisting pass (default = off)"));
-*/
+// Enable the GVN hoisting pass.
 bool EnableGVNHoist = false;
 
-/*
-static cl::opt<bool>
-    DisableLibCallsShrinkWrap("disable-libcalls-shrinkwrap", cl::init(false),
-                              cl::Hidden,
-                              cl::desc("Disable shrink-wrap library calls"));
-*/
+// Disable shrink-wrap library calls.
 bool DisableLibCallsShrinkWrap = false;
 
-/*
-static cl::opt<bool> EnableSimpleLoopUnswitch(
-    "enable-simple-loop-unswitch", cl::init(false), cl::Hidden,
-    cl::desc("Enable the simple loop unswitch pass. Also enables independent "
-             "cleanup passes integrated into the loop pass manager pipeline."));
-*/
+// Enable the simple loop unswitch pass. Also enables independent
+// cleanup passes integrated into the loop pass manager pipeline.
 bool EnableSimpleLoopUnswitch = false;
 
-/*
-cl::opt<bool>
-    EnableGVNSink("enable-gvn-sink", cl::init(false), cl::ZeroOrMore,
-                  cl::desc("Enable the GVN sinking pass (default = off)"));
-*/
+// Enable the GVN sinking pass.
 bool EnableGVNSink = false;
 
 // This option is used in simplifying testing SampleFDO optimizations for
 // profile loading.
-/*
-cl::opt<bool>
-    EnableCHR("enable-chr", cl::init(true), cl::Hidden,
-              cl::desc("Enable control height reduction optimization (CHR)"));
-*/
+// Enable control height reduction optimization (CHR).
 bool EnableCHR = true;
 
-/*
-cl::opt<bool> FlattenedProfileUsed(
-    "flattened-profile-used", cl::init(false), cl::Hidden,
-    cl::desc("Indicate the sample profile being used is flattened, i.e., "
-             "no inline hierachy exists in the profile. "));
-*/
+// Indicate the sample profile being used is flattened, i.e.,
+// no inline hierachy exists in the profile.
 bool FlattenedProfileUsed = false;
 
-/*
-cl::opt<bool> EnableOrderFileInstrumentation(
-    "enable-order-file-instrumentation", cl::init(false), cl::Hidden,
-    cl::desc("Enable order file instrumentation (default = off)"));
-*/
+// Enable order file instrumentation.
 bool EnableOrderFileInstrumentation = false;
 
-/*
-cl::opt<bool> EnableMatrix(
-    "enable-matrix", cl::init(false), cl::Hidden,
-    cl::desc("Enable lowering of the matrix intrinsics"));
-*/
+// Enable lowering of the matrix intrinsics.
 bool EnableMatrix = false;
 
-/*
-cl::opt<bool> EnableConstraintElimination(
-    "enable-constraint-elimination", cl::init(false), cl::Hidden,
-    cl::desc(
-        "Enable pass to eliminate conditions based on linear constraints."));
-*/
+// Enable pass to eliminate conditions based on linear constraints.
 bool EnableConstraintElimination = true;
 
-/*
-cl::opt<AttributorRunOption> AttributorRun(
-    "attributor-enable", cl::Hidden, cl::init(AttributorRunOption::NONE),
-    cl::desc("Enable the attributor inter-procedural deduction pass."),
-    cl::values(clEnumValN(AttributorRunOption::ALL, "all",
-                          "enable all attributor runs"),
-               clEnumValN(AttributorRunOption::MODULE, "module",
-                          "enable module-wide attributor runs"),
-               clEnumValN(AttributorRunOption::CGSCC, "cgscc",
-                          "enable call graph SCC attributor runs"),
-               clEnumValN(AttributorRunOption::NONE, "none",
-                          "disable attributor runs")));
-*/
+// Enable the attributor inter-procedural deduction pass.
 AttributorRunOption AttributorRun = AttributorRunOption::NONE;
 
-/*
-extern cl::opt<bool> EnableKnowledgeRetention;
-*/
 bool EnableKnowledgeRetention = false;
 
 }
@@ -364,23 +245,10 @@ void PassManagerBuilder::addInitialAliasAnalysisPasses(
 
 void PassManagerBuilder::populateFunctionPassManager(
     legacy::FunctionPassManager &FPM) {
-  addExtensionsToPM(EP_EarlyAsPossible, FPM);
   FPM.add(createEntryExitInstrumenterPass());
 
-  // Add LibraryInfo if we have some.
-  if (LibraryInfo)
-    FPM.add(new TargetLibraryInfoWrapperPass(*LibraryInfo));
-
-  // The backends do not handle matrix intrinsics currently.
-  // Make sure they are also lowered in O0.
-  // FIXME: A lightweight version of the pass should run in the backend
-  //        pipeline on demand.
-  if (EnableMatrix && OptLevel == 0)
-    FPM.add(createLowerMatrixIntrinsicsMinimalPass());
-
-  if (OptLevel == 0) return;
-
-  addInitialAliasAnalysisPasses(FPM);
+  FPM.add(createTypeBasedAAWrapperPass());
+  FPM.add(createScopedNoAliasAAWrapperPass());
 
   FPM.add(createCFGSimplificationPass());
   FPM.add(createSROAPass());
@@ -448,19 +316,19 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
   assert(OptLevel >= 1 && "Calling function optimizer with no optimization level!");
   MPM.add(createSROAPass());
   MPM.add(createEarlyCSEPass(true /* Enable mem-ssa. */)); // Catch trivial redundancies
-  if (EnableKnowledgeRetention)
+  if (EnableKnowledgeRetention) // DEL
     MPM.add(createAssumeSimplifyPass());
 
   if (OptLevel > 1) {
-    if (EnableGVNHoist)
+    if (EnableGVNHoist) // DEL
       MPM.add(createGVNHoistPass());
-    if (EnableGVNSink) {
+    if (EnableGVNSink) { // DEL
       MPM.add(createGVNSinkPass());
       MPM.add(createCFGSimplificationPass());
     }
   }
 
-  if (EnableConstraintElimination)
+  if (EnableConstraintElimination) // RUN
     MPM.add(createConstraintEliminationPass());
 
   if (OptLevel > 1) {
@@ -475,9 +343,9 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
   if (OptLevel > 2)
     MPM.add(createAggressiveInstCombinerPass());
   MPM.add(createInstructionCombiningPass());
-  if (SizeLevel == 0 && !DisableLibCallsShrinkWrap)
+  if (SizeLevel == 0 && !DisableLibCallsShrinkWrap) // RUN
     MPM.add(createLibCallsShrinkWrapPass());
-  addExtensionsToPM(EP_Peephole, MPM);
+  addExtensionsToPM(EP_Peephole, MPM); // DEL
 
   // Optimize memory intrinsic calls based on the profiled size information.
   if (SizeLevel == 0)
@@ -511,22 +379,22 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
   MPM.add(createCFGSimplificationPass());
   MPM.add(createInstructionCombiningPass());
   // We resume loop passes creating a second loop pipeline here.
-  if (EnableLoopFlatten) {
+  if (EnableLoopFlatten) { // RUN
     MPM.add(createLoopFlattenPass()); // Flatten loops
     MPM.add(createLoopSimplifyCFGPass());
   }
   MPM.add(createLoopIdiomPass());             // Recognize idioms like memset.
   MPM.add(createIndVarSimplifyPass());        // Canonicalize indvars
-  addExtensionsToPM(EP_LateLoopOptimizations, MPM);
+  addExtensionsToPM(EP_LateLoopOptimizations, MPM); // DEL
   MPM.add(createLoopDeletionPass());          // Delete dead loops
 
-  if (EnableLoopInterchange)
+  if (EnableLoopInterchange) // RUN
     MPM.add(createLoopInterchangePass()); // Interchange loops
 
   // Unroll small loops
   MPM.add(createSimpleLoopUnrollPass(OptLevel, DisableUnrollLoops,
                                      ForgetAllSCEVInLoopUnroll));
-  addExtensionsToPM(EP_LoopOptimizerEnd, MPM);
+  addExtensionsToPM(EP_LoopOptimizerEnd, MPM); // DEL
   // This ends the loop pass pipelines.
 
   // Break up allocas that may now be splittable after loop unrolling.
@@ -540,7 +408,7 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
   MPM.add(createMemCpyOptPass());             // Remove memcpy / form memset
   MPM.add(createSCCPPass());                  // Constant prop with SCCP
 
-  if (EnableConstraintElimination)
+  if (EnableConstraintElimination) // RUN
     MPM.add(createConstraintEliminationPass());
 
   // Delete dead bit computations (instcombine runs after to fold away the dead
@@ -551,7 +419,7 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
   // Run instcombine after redundancy elimination to exploit opportunities
   // opened up by them.
   MPM.add(createInstructionCombiningPass());
-  addExtensionsToPM(EP_Peephole, MPM);
+  addExtensionsToPM(EP_Peephole, MPM); // DEL
   if (OptLevel > 1) {
     MPM.add(createJumpThreadingPass());         // Thread jumps
     MPM.add(createCorrelatedValuePropagationPass());
@@ -564,7 +432,7 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
     MPM.add(createLICMPass(LicmMssaOptCap, LicmMssaNoAccForPromotionCap));
   }
 
-  addExtensionsToPM(EP_ScalarOptimizerLate, MPM);
+  addExtensionsToPM(EP_ScalarOptimizerLate, MPM); // DEL
 
   if (RerollLoops)
     MPM.add(createLoopRerollPass());
@@ -572,10 +440,10 @@ void PassManagerBuilder::addFunctionSimplificationPasses(
   MPM.add(createCFGSimplificationPass()); // Merge & remove BBs
   // Clean up after everything.
   MPM.add(createInstructionCombiningPass());
-  addExtensionsToPM(EP_Peephole, MPM);
+  addExtensionsToPM(EP_Peephole, MPM); // DEL
 
   if (EnableCHR && OptLevel >= 3 &&
-      (!PGOInstrUse.empty() || !PGOSampleUse.empty() || EnablePGOCSInstrGen))
+      (!PGOInstrUse.empty() || !PGOSampleUse.empty() || EnablePGOCSInstrGen)) // DEL
     MPM.add(createControlHeightReductionLegacyPass());
 }
 
@@ -587,7 +455,7 @@ void PassManagerBuilder::populateModulePassManager(
 
   MPM.add(createAnnotation2MetadataLegacyPass());
 
-  if (!PGOSampleUse.empty()) {
+  if (!PGOSampleUse.empty()) { // DEL
     MPM.add(createPruneEHPass());
     // In ThinLTO mode, when flattened profile is used, all the available
     // profile information will be annotated in PreLink phase so there is
@@ -601,7 +469,7 @@ void PassManagerBuilder::populateModulePassManager(
 
   // If all optimizations are disabled, just run the always-inline pass and,
   // if enabled, the function merging pass.
-  if (OptLevel == 0) {
+  if (OptLevel == 0) { // DEL
     addPGOInstrPasses(MPM);
     if (Inliner) {
       MPM.add(Inliner);
@@ -643,7 +511,7 @@ void PassManagerBuilder::populateModulePassManager(
   }
 
   // Add LibraryInfo if we have some.
-  if (LibraryInfo)
+  if (LibraryInfo) // DEL
     MPM.add(new TargetLibraryInfoWrapperPass(*LibraryInfo));
 
   addInitialAliasAnalysisPasses(MPM);
@@ -655,7 +523,7 @@ void PassManagerBuilder::populateModulePassManager(
   // inter-module indirect calls. For that we perform indirect call promotion
   // earlier in the pass pipeline, here before globalopt. Otherwise imported
   // available_externally functions look unreferenced and are removed.
-  if (PerformThinLTO) {
+  if (PerformThinLTO) { // DEL
     MPM.add(createPGOIndirectCallPromotionLegacyPass(/*InLTO = */ true,
                                                      !PGOSampleUse.empty()));
     MPM.add(createLowerTypeTestsPass(nullptr, nullptr, true));
@@ -666,17 +534,17 @@ void PassManagerBuilder::populateModulePassManager(
   // in backend more difficult.
   bool PrepareForThinLTOUsingPGOSampleProfile =
       PrepareForThinLTO && !PGOSampleUse.empty();
-  if (PrepareForThinLTOUsingPGOSampleProfile)
+  if (PrepareForThinLTOUsingPGOSampleProfile) // DEL
     DisableUnrollLoops = true;
 
   // Infer attributes about declarations if possible.
   MPM.add(createInferFunctionAttrsLegacyPass());
 
   // Infer attributes on declarations, call sites, arguments, etc.
-  if (AttributorRun & AttributorRunOption::MODULE)
+  if (AttributorRun & AttributorRunOption::MODULE) // DEL
     MPM.add(createAttributorLegacyPass());
 
-  addExtensionsToPM(EP_ModuleOptimizerEarly, MPM);
+  addExtensionsToPM(EP_ModuleOptimizerEarly, MPM); // DEL
 
   if (OptLevel > 2)
     MPM.add(createCallSiteSplittingPass());
@@ -691,7 +559,7 @@ void PassManagerBuilder::populateModulePassManager(
   MPM.add(createDeadArgEliminationPass()); // Dead argument elimination
 
   MPM.add(createInstructionCombiningPass()); // Clean up after IPCP & DAE
-  addExtensionsToPM(EP_Peephole, MPM);
+  addExtensionsToPM(EP_Peephole, MPM); // DEL
   MPM.add(createCFGSimplificationPass()); // Clean up after IPCP & DAE
 
   // For SamplePGO in ThinLTO compile phase, we do not want to do indirect
@@ -700,11 +568,11 @@ void PassManagerBuilder::populateModulePassManager(
   // PGO instrumentation is added during the compile phase for ThinLTO, do
   // not run it a second time
   if (DefaultOrPreLinkPipeline && !PrepareForThinLTOUsingPGOSampleProfile)
-    addPGOInstrPasses(MPM);
+    addPGOInstrPasses(MPM); // RUN
 
   // Create profile COMDAT variables. Lld linker wants to see all variables
   // before the LTO/ThinLTO link since it needs to resolve symbols/comdats.
-  if (!PerformThinLTO && EnablePGOCSInstrGen)
+  if (!PerformThinLTO && EnablePGOCSInstrGen) // DEL
     MPM.add(createPGOInstrumentationGenCreateVarLegacyPass(PGOInstrGen));
 
   // We add a module alias analysis pass here. In part due to bugs in the
@@ -715,14 +583,14 @@ void PassManagerBuilder::populateModulePassManager(
   // Start of CallGraph SCC passes.
   MPM.add(createPruneEHPass()); // Remove dead EH info
   bool RunInliner = false;
-  if (Inliner) {
+  if (Inliner) { // RUN
     MPM.add(Inliner);
     Inliner = nullptr;
     RunInliner = true;
   }
 
   // Infer attributes on declarations, call sites, arguments, etc. for an SCC.
-  if (AttributorRun & AttributorRunOption::CGSCC)
+  if (AttributorRun & AttributorRunOption::CGSCC) // DEL.
     MPM.add(createAttributorCGSCCLegacyPass());
 
   // Try to perform OpenMP specific optimizations. This is a (quick!) no-op if
@@ -734,7 +602,7 @@ void PassManagerBuilder::populateModulePassManager(
   if (OptLevel > 2)
     MPM.add(createArgumentPromotionPass()); // Scalarize uninlined fn args
 
-  addExtensionsToPM(EP_CGSCCOptimizerLate, MPM);
+  addExtensionsToPM(EP_CGSCCOptimizerLate, MPM); // DEL
   addFunctionSimplificationPasses(MPM);
 
   // FIXME: This is a HACK! The inliner pass above implicitly creates a CGSCC
@@ -745,7 +613,7 @@ void PassManagerBuilder::populateModulePassManager(
   if (RunPartialInlining)
     MPM.add(createPartialInliningPass());
 
-  if (OptLevel > 1 && !PrepareForLTO && !PrepareForThinLTO)
+  if (OptLevel > 1 && !PrepareForLTO && !PrepareForThinLTO) // RUN
     // Remove avail extern fns and globals definitions if we aren't
     // compiling an object file for later LTO. For LTO we want to preserve
     // these so they are eligible for inlining at link-time. Note if they
@@ -762,10 +630,10 @@ void PassManagerBuilder::populateModulePassManager(
   // are performed.
   // Need to do this after COMDAT variables have been eliminated,
   // (i.e. after EliminateAvailableExternallyPass).
-  if (!(PrepareForLTO || PrepareForThinLTO))
+  if (!(PrepareForLTO || PrepareForThinLTO)) // RUN
     addPGOInstrPasses(MPM, /* IsCS */ true);
 
-  if (EnableOrderFileInstrumentation)
+  if (EnableOrderFileInstrumentation) // DEL
     MPM.add(createInstrOrderFilePass());
 
   MPM.add(createReversePostOrderFunctionAttrsPass());
@@ -784,7 +652,7 @@ void PassManagerBuilder::populateModulePassManager(
   // If we are planning to perform ThinLTO later, let's not bloat the code with
   // unrolling/vectorization/... now. We'll first run the inliner + CGSCC passes
   // during ThinLTO and perform the rest of the optimizations afterward.
-  if (PrepareForThinLTO) {
+  if (PrepareForThinLTO) { // DEL
     // Ensure we perform any last passes, but do so before renaming anonymous
     // globals in case the passes add any.
     addExtensionsToPM(EP_OptimizerLast, MPM);
@@ -794,7 +662,7 @@ void PassManagerBuilder::populateModulePassManager(
     return;
   }
 
-  if (PerformThinLTO)
+  if (PerformThinLTO) // DEL
     // Optimize globals now when performing ThinLTO, this enables more
     // optimizations later.
     MPM.add(createGlobalOptimizerPass());
@@ -829,7 +697,7 @@ void PassManagerBuilder::populateModulePassManager(
   MPM.add(createFloat2IntPass());
   MPM.add(createLowerConstantIntrinsicsPass());
 
-  if (EnableMatrix) {
+  if (EnableMatrix) { // DEL
     MPM.add(createLowerMatrixIntrinsicsPass());
     // CSE the pointer arithmetic of the column vectors.  This allows alias
     // analysis to establish no-aliasing between loads and stores of different
@@ -837,7 +705,7 @@ void PassManagerBuilder::populateModulePassManager(
     MPM.add(createEarlyCSEPass(false));
   }
 
-  addExtensionsToPM(EP_VectorizerStart, MPM);
+  addExtensionsToPM(EP_VectorizerStart, MPM); // DEL
 
   // Re-rotate loops in all our loop nests. These may have fallout out of
   // rotated form due to GVN or other transformations, and the vectorizer relies
@@ -862,7 +730,7 @@ void PassManagerBuilder::populateModulePassManager(
   // as function calls, so that we can only pass them when the vectorizer
   // changed the code.
   MPM.add(createInstructionCombiningPass());
-  if (OptLevel > 1 && ExtraVectorizerPasses) {
+  if (OptLevel > 1 && ExtraVectorizerPasses) { // DEL
     // At higher optimization levels, try to clean up any runtime overlap and
     // alignment checks inserted by the vectorizer. We want to track correllated
     // runtime checks for two inner loops in the same outer loop, fold any
@@ -892,7 +760,7 @@ void PassManagerBuilder::populateModulePassManager(
                                           .hoistCommonInsts(true)
                                           .sinkCommonInsts(true)));
 
-  if (SLPVectorize) {
+  if (SLPVectorize) { // DEL
     MPM.add(createSLPVectorizerPass()); // Vectorize parallel scalar chains.
     if (OptLevel > 1 && ExtraVectorizerPasses) {
       MPM.add(createEarlyCSEPass());
@@ -902,7 +770,7 @@ void PassManagerBuilder::populateModulePassManager(
   // Enhance/cleanup vector code.
   MPM.add(createVectorCombinePass());
 
-  addExtensionsToPM(EP_Peephole, MPM);
+  addExtensionsToPM(EP_Peephole, MPM); // DEL
   MPM.add(createInstructionCombiningPass());
 
   if (EnableUnrollAndJam && !DisableUnrollLoops) {
@@ -945,10 +813,10 @@ void PassManagerBuilder::populateModulePassManager(
 
   // See comment in the new PM for justification of scheduling splitting at
   // this stage (\ref buildModuleSimplificationPipeline).
-  if (EnableHotColdSplit && !(PrepareForLTO || PrepareForThinLTO))
+  if (EnableHotColdSplit && !(PrepareForLTO || PrepareForThinLTO)) // DEL
     MPM.add(createHotColdSplittingPass());
 
-  if (MergeFunctions)
+  if (MergeFunctions) // DEL
     MPM.add(createMergeFunctionsPass());
 
   // Add Module flag "CG Profile" based on Branch Frequency Information.
@@ -972,9 +840,9 @@ void PassManagerBuilder::populateModulePassManager(
   // resulted in single-entry-single-exit or empty blocks. Clean up the CFG.
   MPM.add(createCFGSimplificationPass());
 
-  addExtensionsToPM(EP_OptimizerLast, MPM);
+  addExtensionsToPM(EP_OptimizerLast, MPM); // DEL
 
-  if (PrepareForLTO) {
+  if (PrepareForLTO) { // DEL
     MPM.add(createCanonicalizeAliasesPass());
     // Rename anon globals to be able to handle them in the summary
     MPM.add(createNameAnonGlobalPass());
