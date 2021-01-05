@@ -1,3 +1,7 @@
+'''
+use this .py file in command line like: python local2global.py t6.ssa.c
+'''
+
 import os
 import argparse
 import re
