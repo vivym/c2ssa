@@ -1,6 +1,11 @@
+'''
+use this .py file in command line like: python draw_call_graph.py t6.ssa.c
+please install graphviz
+'''
+
 import re
 from graphviz import Digraph
-import sys
+import argparse
 
 
 def draw_call_graph(source_file):
@@ -31,5 +36,7 @@ def draw_call_graph(source_file):
 
 
 if __name__ == '__main__':
-    source_file = sys.argv[1]
-    draw_call_graph(source_file)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("src", type=str, help="ssa source file.")
+    arg = parser.parse_args()
+    draw_call_graph(arg.src)
