@@ -249,25 +249,6 @@ public:
   void EmitAssembly(std::unique_ptr<raw_pwrite_stream> OS);
 };
 
-// We need this wrapper to access LangOpts and CGOpts from extension functions
-// that we add to the PassManagerBuilder.
-class PassManagerBuilderWrapper : public c2ssa::PassManagerBuilder {
-public:
-  PassManagerBuilderWrapper(const Triple &TargetTriple,
-                            const CodeGenOptions &CGOpts,
-                            const LangOptions &LangOpts)
-      : PassManagerBuilder(), TargetTriple(TargetTriple), CGOpts(CGOpts),
-        LangOpts(LangOpts) {}
-  const Triple &getTargetTriple() const { return TargetTriple; }
-  const CodeGenOptions &getCGOpts() const { return CGOpts; }
-  const LangOptions &getLangOpts() const { return LangOpts; }
-
-private:
-  const Triple &TargetTriple;
-  const CodeGenOptions &CGOpts;
-  const LangOptions &LangOpts;
-};
-
 }
 
 void EmitAssemblyHelper::addFunctionSimplificationPasses(legacy::PassManagerBase &MPM) {
