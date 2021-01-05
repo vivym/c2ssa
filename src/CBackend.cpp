@@ -2381,7 +2381,7 @@ void CWriter::declareOneGlobalVariable(GlobalVariable *I) {
     headerUseMsAlign();
     Out << "__MSALIGN__(" << Alignment << ") ";
   }
-  if (isa<Constant>(I)) {
+  if (I->isConstant()) {
     Out << "const ";
   }
   printTypeName(Out, ElTy, false) << ' ' << GetValueName(I);
@@ -2668,6 +2668,8 @@ void CWriter::printFunction(Function &F, llvm::LoopInfo *LI) {
     Out << "__declspec(dllexport) ";
   if (F.hasLocalLinkage())
     Out << "static ";
+  
+  Out << "/***********FUNC_BEGIN****************/\n";
 
   iterator_range<Function::arg_iterator> args = F.args();
   printFunctionProto(Out, F.getFunctionType(),
@@ -2692,6 +2694,7 @@ void CWriter::printFunction(Function &F, llvm::LoopInfo *LI) {
   bool PrintedVar = false;
 
   // print local variable information for the function
+  Out << "/***********LOCAL_VAR_BEGIN***********/\n";
   for (inst_iterator I = inst_begin(&F), E = inst_end(&F); I != E; ++I) {
     if (AllocaInst *AI = isDirectAlloca(&*I)) {
       unsigned Alignment = AI->getAlignment();
@@ -2731,6 +2734,7 @@ void CWriter::printFunction(Function &F, llvm::LoopInfo *LI) {
       PrintedVar = true;
     }
   }
+  Out << "/************LOCAL_VAR_END************/\n";
 
   if (PrintedVar)
     Out << '\n';
@@ -2745,7 +2749,8 @@ void CWriter::printFunction(Function &F, llvm::LoopInfo *LI) {
     }
   }
 
-  Out << "}\n\n";
+  Out << "}\n";
+  Out << "/************FUNC_END*****************/\n\n";
 }
 
 void CWriter::printLoop(Loop *L) {
@@ -3701,7 +3706,7 @@ void CWriter::visitCallInst(CallInst &I) {
     if (ID != Intrinsic::not_intrinsic && visitBuiltinCall(I, ID))
       return;
   }
-
+  
   Value *Callee = I.getCalledOperand();
 
   PointerType *PTy = cast<PointerType>(Callee->getType());
@@ -3714,7 +3719,6 @@ void CWriter::visitCallInst(CallInst &I) {
   bool isStructRet = I.hasStructRetAttr();
   if (isStructRet) {
     writeOperandDeref(I.getArgOperand(0));
-    Out << " = ";
   }
 
   /// TODO:
@@ -3805,6 +3809,8 @@ void CWriter::visitCallInst(CallInst &I) {
     PrintedArg = true;
   }
   Out << ')';
+  
+  Out << "/******CALL******/";
 }
 
 /// visitBuiltinCall - Handle the call to the specified builtin.  Returns true
