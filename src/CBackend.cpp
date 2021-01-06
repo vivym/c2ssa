@@ -2037,6 +2037,8 @@ void CWriter::generateHeader(Module &M) {
   
   // get declaration for alloca
   OutHeaders << "/* Provide Declarations */\n";
+  OutHeaders << "#include <stdio.h>\n";
+  OutHeaders << "#include <stdlib.h>\n";
   OutHeaders << "#include <stdarg.h>\n"; // Varargs support
   OutHeaders << "#include <setjmp.h>\n"; // Unwind support
   OutHeaders << "#include <limits.h>\n"; // With overflow intrinsics support.

@@ -13,7 +13,6 @@
 #include <vector>
 
 int main(int argc, const char **argv) {
-  // clang::tooling::CommonOptionsParser OptionsParser(argc, argv, C11SSACategory);
   std::vector<const char *> CommandLine;
   std::vector<std::string> StrippedArgs;
   std::unique_ptr<clang::tooling::CompilationDatabase> Compilations = std::make_unique<clang::tooling::FixedCompilationDatabase>(".", StrippedArgs);

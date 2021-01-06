@@ -553,7 +553,7 @@ void c2ssa::EmitBackendOutput(DiagnosticsEngine &Diags,
                               const LangOptions &LOpts,
                               const llvm::DataLayout &TDesc, Module *M,
                               std::unique_ptr<raw_pwrite_stream> OS) {
-  llvm::TimeTraceScope TimeScope("Backend");
+  llvm::TimeTraceScope TimeScope("EmitBackendOutput");
 
   EmitAssemblyHelper AsmHelper(Diags, HeaderOpts, CGOpts, TOpts, LOpts, M);
   AsmHelper.EmitAssembly(std::move(OS));

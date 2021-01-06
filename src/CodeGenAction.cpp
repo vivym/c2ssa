@@ -98,16 +98,13 @@ namespace c2ssa {
     const CodeGenOptions &CodeGenOpts;
     const clang::TargetOptions &TargetOpts;
     const LangOptions &LangOpts;
-    std::unique_ptr<raw_pwrite_stream> AsmOutStream;
+    std::unique_ptr<raw_pwrite_stream> OutStream;
     ASTContext *Context;
 
-    Timer LLVMIRGeneration;
-    unsigned LLVMIRGenerationRefCount;
+    Timer BackendTimer;
+    unsigned BackendRefCount;
 
-    /// True if we've finished generating IR. This prevents us from generating
-    /// additional LLVM IR after emitting output in HandleTranslationUnit. This
-    /// can happen when Clang plugins trigger additional AST deserialization.
-    bool IRGenFinished = false;
+    bool GenFinished = false;
 
     bool TimerIsEnabled = false;
 
@@ -128,9 +125,9 @@ namespace c2ssa {
                     CoverageSourceInfo *CoverageInfo = nullptr)
         : Diags(Diags), HeaderSearchOpts(HeaderSearchOpts),
           CodeGenOpts(CodeGenOpts), TargetOpts(TargetOpts), LangOpts(LangOpts),
-          AsmOutStream(std::move(OS)), Context(nullptr),
-          LLVMIRGeneration("irgen", "LLVM IR Generation Time"),
-          LLVMIRGenerationRefCount(0),
+          OutStream(std::move(OS)), Context(nullptr),
+          BackendTimer("backendgen", "Backend Generation Time"),
+          BackendRefCount(0),
           Gen(CreateLLVMCodeGen(Diags, InFile, HeaderSearchOpts, PPOpts,
                                 CodeGenOpts, C, CoverageInfo)) {
       TimerIsEnabled = CodeGenOpts.TimePasses;
@@ -151,12 +148,12 @@ namespace c2ssa {
       Context = &Ctx;
 
       if (TimerIsEnabled)
-        LLVMIRGeneration.startTimer();
+        BackendTimer.startTimer();
 
       Gen->Initialize(Ctx);
 
       if (TimerIsEnabled)
-        LLVMIRGeneration.stopTimer();
+        BackendTimer.stopTimer();
     }
 
     bool HandleTopLevelDecl(DeclGroupRef D) override {
@@ -166,17 +163,17 @@ namespace c2ssa {
 
       // Recurse.
       if (TimerIsEnabled) {
-        LLVMIRGenerationRefCount += 1;
-        if (LLVMIRGenerationRefCount == 1)
-          LLVMIRGeneration.startTimer();
+        BackendRefCount += 1;
+        if (BackendRefCount == 1)
+          BackendTimer.startTimer();
       }
 
       Gen->HandleTopLevelDecl(D);
 
       if (TimerIsEnabled) {
-        LLVMIRGenerationRefCount -= 1;
-        if (LLVMIRGenerationRefCount == 0)
-          LLVMIRGeneration.stopTimer();
+        BackendRefCount -= 1;
+        if (BackendRefCount == 0)
+          BackendTimer.stopTimer();
       }
 
       return true;
@@ -187,39 +184,39 @@ namespace c2ssa {
                                      Context->getSourceManager(),
                                      "Generation of inline function");
       if (TimerIsEnabled)
-        LLVMIRGeneration.startTimer();
+        BackendTimer.startTimer();
 
       Gen->HandleInlineFunctionDefinition(D);
 
       if (TimerIsEnabled)
-        LLVMIRGeneration.stopTimer();
+        BackendTimer.stopTimer();
     }
 
     void HandleInterestingDecl(DeclGroupRef D) override {
       // Ignore interesting decls from the AST reader after IRGen is finished.
-      if (!IRGenFinished)
+      if (!GenFinished)
         HandleTopLevelDecl(D);
     }
 
     void HandleTranslationUnit(ASTContext &C) override {
       {
         llvm::TimeTraceScope TimeScope("Frontend");
-        PrettyStackTraceString CrashInfo("Per-file LLVM IR generation");
+        PrettyStackTraceString CrashInfo("Per-file Generation");
         if (TimerIsEnabled) {
-          LLVMIRGenerationRefCount += 1;
-          if (LLVMIRGenerationRefCount == 1)
-            LLVMIRGeneration.startTimer();
+          BackendRefCount += 1;
+          if (BackendRefCount == 1)
+            BackendTimer.startTimer();
         }
 
         Gen->HandleTranslationUnit(C);
 
         if (TimerIsEnabled) {
-          LLVMIRGenerationRefCount -= 1;
-          if (LLVMIRGenerationRefCount == 0)
-            LLVMIRGeneration.stopTimer();
+          BackendRefCount -= 1;
+          if (BackendRefCount == 0)
+            BackendTimer.stopTimer();
         }
 
-        IRGenFinished = true;
+        GenFinished = true;
       }
 
       // Silently ignore if we weren't initialized for some reason.
@@ -259,7 +256,7 @@ namespace c2ssa {
 
       EmitBackendOutput(Diags, HeaderSearchOpts, CodeGenOpts, TargetOpts,
                         LangOpts, C.getTargetInfo().getDataLayout(),
-                        getModule(), std::move(AsmOutStream));
+                        getModule(), std::move(OutStream));
 
       Ctx.setInlineAsmDiagnosticHandler(OldHandler, OldContext);
 
@@ -272,7 +269,7 @@ namespace c2ssa {
     void HandleTagDeclDefinition(TagDecl *D) override {
       PrettyStackTraceDecl CrashInfo(D, SourceLocation(),
                                      Context->getSourceManager(),
-                                     "LLVM IR generation of declaration");
+                                     "Generation of declaration");
       Gen->HandleTagDeclDefinition(D);
     }
 
@@ -802,8 +799,9 @@ std::unique_ptr<ASTConsumer>
 CodeGenAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   // BackendAction BA = static_cast<BackendAction>(Act);
   std::unique_ptr<raw_pwrite_stream> OS = CI.takeOutputStream();
-  if (!OS)
+  if (!OS) {
     OS = CI.createDefaultOutputFile(false, InFile, "ssa.c");
+  }
 
   CI.getCodeGenOpts().OptimizationLevel = 3;
   CI.getCodeGenOpts().UnrollLoops = true;
