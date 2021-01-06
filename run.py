@@ -39,6 +39,9 @@ class Pass(object):
     def run(self, code: str) -> str:
         raise NotImplementedError
 
+    def check_dependencies(self) -> bool:
+        return True
+
 
 class PassManager(object):
     def __init__(self):
@@ -48,7 +51,14 @@ class PassManager(object):
         self.passes.append(p)
         return self
 
-    def run(self, code: str) -> None:
+    def check_dependencies(self):
+        for p in self.passes:
+            if not p.check_dependencies():
+                return False
+
+        return True
+
+    def run(self, code: str) -> str:
         for p in self.passes:
             try:
                 code = p.run(code)
@@ -145,6 +155,15 @@ class ClangTidyPass(Pass):
             tf.seek(0)
             code = tf.read().decode("utf-8")
         return code
+
+    def check_dependencies(self):
+        with open(os.devnull, 'w') as devnull:
+            ret = subprocess.call("clang-tidy -h", shell=True, stdout=devnull, stderr=devnull)
+            if ret != 0:
+                print("Command not found: clang-tidy. Please install it first.")
+                return False
+
+        return True
 
 
 class C2SSAPass(Pass):
@@ -556,6 +575,9 @@ def main(args):
     pm.add(PromoteLocalVariablesPass())
     pm.add(RemoveMarksPass())
     pm.add(ClangTidyPass())
+
+    if not pm.check_dependencies():
+        return
 
     code = pm.run(open(src).read())
     open(dst, "w").write(code)
