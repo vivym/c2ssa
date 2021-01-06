@@ -162,7 +162,6 @@
 #include "llvm/Transforms/Scalar/Reg2Mem.h"
 #include "llvm/Transforms/Scalar/RewriteStatepointsForGC.h"
 #include "llvm/Transforms/Scalar/SCCP.h"
-#include "llvm/Transforms/Scalar/SROA.h"
 #include "llvm/Transforms/Scalar/ScalarizeMaskedMemIntrin.h"
 #include "llvm/Transforms/Scalar/Scalarizer.h"
 #include "llvm/Transforms/Scalar/SeparateConstOffsetFromGEP.h"
@@ -208,6 +207,7 @@
 #include "PrintingPass.h"
 #include "LoopUnrollPass.h"
 #include "CallGraph.h"
+#include "SROA.h"
 #include <memory>
 #include <sstream>
 using namespace clang;
@@ -252,7 +252,7 @@ public:
 }
 
 void EmitAssemblyHelper::addFunctionSimplificationPasses(legacy::PassManagerBase &MPM) {
-  MPM.add(createSROAPass());
+  MPM.add(c2ssa::createSROAPass());
   MPM.add(createEarlyCSEPass(true /* Enable mem-ssa. */)); // Catch trivial redundancies
 
   MPM.add(createConstraintEliminationPass());
@@ -302,7 +302,7 @@ void EmitAssemblyHelper::addFunctionSimplificationPasses(legacy::PassManagerBase
   // This ends the loop pass pipelines.
 
   // Break up allocas that may now be splittable after loop unrolling.
-  MPM.add(createSROAPass());
+  MPM.add(c2ssa::createSROAPass());
 
   MPM.add(createMergedLoadStoreMotionPass()); // Merge ld/st in diamonds
   MPM.add(createGVNPass(false)); // Remove redundancies
@@ -348,7 +348,7 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
     FPM.add(createScopedNoAliasAAWrapperPass());
 
     FPM.add(createCFGSimplificationPass());
-    FPM.add(createSROAPass());
+    FPM.add(c2ssa::createSROAPass());
     // Common Subexpression Elimination
     FPM.add(createEarlyCSEPass());
   }

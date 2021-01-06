@@ -10,6 +10,7 @@
 #include "llvm/InitializePasses.h"
 #include "PrintingPass.h"
 #include "CodeGenAction.h"
+#include "SROA.h"
 #include <vector>
 
 int main(int argc, const char **argv) {
@@ -27,5 +28,6 @@ int main(int argc, const char **argv) {
 
   llvm::PassRegistry *Registry = llvm::PassRegistry::getPassRegistry();
   c2ssa::initializeC2SSAPrintModulePass(*Registry);
+  c2ssa::initializeSROAPassPass(*Registry);
   return Tool.run(clang::tooling::newFrontendActionFactory<c2ssa::CodeGenAction>().get());
 }
