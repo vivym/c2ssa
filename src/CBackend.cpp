@@ -2709,7 +2709,8 @@ void CWriter::printFunction(Function &F, llvm::LoopInfo *LI) {
       Out << GetValueName(AI);
       if (IsOveraligned)
         Out << " __attribute__((aligned(" << Alignment << ")))";
-      Out << ";    /* Address-exposed local */\n";
+      // Out << ";    /* Address-exposed local */\n";
+      Out << ";\n";
       PrintedVar = true;
     } else if (!isEmptyType(I->getType()) && !isInlinableInst(*I) && I->getNumUses() > 0) {
       Out << "  ";
@@ -3746,6 +3747,12 @@ bool CWriter::visitBuiltinCall(CallInst &I, Intrinsic::ID ID) {
     errorWithMessage("unknown llvm instrinsic");
     return false;
   }
+  case Intrinsic::lifetime_start:
+      Out << "/* lifetime_start */";
+      return true;
+  case Intrinsic::lifetime_end:
+      Out << "/* lifetime_end */";
+      return true;
   case Intrinsic::dbg_value:
   case Intrinsic::dbg_declare:
     return true; // ignore these intrinsics

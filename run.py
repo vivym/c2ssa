@@ -68,8 +68,35 @@ def preprocess(src, verify):
     return src
 
 
+def remove_lifetime_intrinsic(code):
+    lines = code.split("\n")
+    new_lines = []
+    deleted_pos = []
+    for i in range(len(lines)):
+        l = lines[i]
+        if "/* lifetime_start */;" == l.strip():
+            deleted_l = new_lines.pop()
+            var = re.match(r"^\s*(\S+)\s*", deleted_l).group(1)
+            for p in range(len(new_lines) - 1, -1, -1):
+                if re.match(r"^\s*\S+ " + var + r";", new_lines[p]):
+                    deleted_pos.append(p)
+                    break
+        elif "/* lifetime_end */;" == l.strip():
+            pass
+        elif re.match(r"^llvm\.lifetime.[\s\S]+called by", l) is not None:
+            pass
+        else:
+            new_lines.append(l)
+
+    return "\n".join([new_lines[i] for i in range(len(new_lines)) if i not in deleted_pos])
+
+
 def postprocess(dst):
-    pass
+    code = open(dst).read()
+
+    code = remove_lifetime_intrinsic(code)
+
+    open(dst, "w").write(code)
 
 
 def main(args):
