@@ -68,12 +68,19 @@ class PassManager(object):
         return code
 
 class VerifyPass(Pass):
-    def __init__():
+    def __init__(self, src):
         super().__init__("verify")
+
+        self.src = src
 
     def run(self, code: str) -> str:
         lines = code.split("\n")
         new_lines = []
+
+        if not any("<stdio.h>" in l for l in lines):
+            new_lines.append("#include <stdio.h>")
+            new_lines.append("")
+        
         for l in lines:
             new_lines.append(l)
             indent = re.match(r"^(\s*)", l).group(1)
@@ -87,7 +94,11 @@ class VerifyPass(Pass):
                 continue
             new_lines.append(f"{indent}printf(\"{var}: %d\\n\", {var});\n")
 
-        return "\n".join(new_lines)
+        code = "\n".join(new_lines)
+
+        open(os.path.splitext(self.src)[0] + ".v.c", "w").write(code)
+
+        return code
 
 
 class RemoveLifetimeIntrinsicPass(Pass):
@@ -558,7 +569,7 @@ def main(args):
 
     pm = PassManager()
     if args.verify:
-        pm.add(VerifyPass())
+        pm.add(VerifyPass(src))
         pm.add(ClangTidyPass())
 
     # core pass
