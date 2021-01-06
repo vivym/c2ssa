@@ -36,10 +36,10 @@ def removeLocalv():
             exist_localv = False
             # 提取函数名
             i += 1
-            search_func = re.search(r"^\s*(.*)\s+(.*)\((.*)\)\s*\{", text[i])
+            search_func = re.search(r"^\s*(\S+)\s+(\S+)\((.*)\)\s*\{", text[i])
             while not search_func:
                 i += 1
-                search_func = re.search(r"^\s*(.*)\s+(.*)\((.*)\)\s*\{", text[i])
+                search_func = re.search(r"^\s*(\S+)\s+(\S+)\((.*)\)\s*\{", text[i])
             func = search_func.group(2)
             i += 1
             while not re.search(r"/\*{12}FUNC_END\*{17}/", text[i]):
@@ -52,7 +52,7 @@ def removeLocalv():
                     text.pop(i)
                     n -= 1
                     while not re.search(r"/\*{12}LOCAL_VAR_END\*{12}/", text[i]):
-                        search_localv = re.search(r"^\s*(.*)\s+(.*);", text[i])
+                        search_localv = re.search(r"^\s*(\S+)\s+(\S+);", text[i])
                         if search_localv:
                             s = search_localv.group(2).strip()
                             localv.append(s)
