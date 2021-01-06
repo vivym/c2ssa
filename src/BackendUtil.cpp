@@ -357,6 +357,9 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
     MPM.add(createTypeBasedAAWrapperPass());
     MPM.add(createScopedNoAliasAAWrapperPass());
     
+    // Infer attributes about declarations if possible.
+    MPM.add(createInferFunctionAttrsLegacyPass());
+    
     // This pass propagates constants from call sites into the
     // bodies of functions, and keeps track of whether basic blocks are executable
     // in the process.
