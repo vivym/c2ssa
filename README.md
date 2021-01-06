@@ -27,4 +27,6 @@ make
 python run.py xx.c
 
 python run.py xx.c --verify
+
+python run.py xx.c --draw-call-graph
 ```
