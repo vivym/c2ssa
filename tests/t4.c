@@ -1,39 +1,48 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-float t = 10.233;
+const int n = 10;
 
-int sum(int i, int j) {
-    int d = rand();
-    if (i % 2 == 0) {
-        return i + j + d;
-    } else {
-        return i - j + d;
-    }
+typedef struct {
+    int x;
+    int y;
+} Point;
+
+int inc(int a) {
+    return a + 1;
 }
 
 int main() {
-    int j = 0;
-    t += 1;
-    for (int i = 0; i < 100; i ++) {
+    Point p = { rand(), rand() };
+
+    for (int i = 0; i < n; i++) {
         if (i % 3 == 0) {
             continue;
         }
 
-        int c = sum(i, j);
-        printf("c: %d\n", c);
-
-        if (i == 8) {
-            continue;
+        switch (i % 4) {
+        case 0:
+            printf("mod: 0\n");
+        case 1:
+            p.y += i;
+            printf("mod: 1\n");
+        case 2:
+            printf("mod: 1\n");
+        default:
+            printf("mod: 3\n");
+            p.x += i;
         }
 
         if (i % 2 == 0) {
-            printf("even: %d\n", j);
+            printf("%d\n", inc(i));
         } else {
-            j += 1;
-            printf("odd\n");
+            p.y += 2;
+        }
+
+        if (i == 7) {
+            break;
         }
     }
 
-    printf("%f\n", t);
+    printf("Point: %d, %d\n", p.x, p.y);
 }

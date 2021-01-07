@@ -280,8 +280,6 @@ void EmitAssemblyHelper::addFunctionSimplificationPasses(legacy::PassManagerBase
   // Begin the loop pass pipeline.
   // Rotate Loop
   MPM.add(createLoopRotatePass(-1));
-  // TODO: Investigate promotion cap for O1.
-  // MPM.add(createLICMPass(LicmMssaOptCap, LicmMssaNoAccForPromotionCap));
   MPM.add(createLoopUnswitchPass(false, false));
   // FIXME: We break the loop pass pipeline here in order to do full
   // simplify-cfg. Eventually loop-simplifycfg should be enhanced to replace the

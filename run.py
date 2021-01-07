@@ -92,7 +92,7 @@ class VerifyPass(Pass):
                 var = m2.group(5).strip().strip(";")
             else:
                 continue
-            new_lines.append(f"{indent}printf(\"{var}: %d\\n\", {var});\n")
+            new_lines.append(f"{indent}printf(\"{var}: %d\\n\", {var});")
 
         code = "\n".join(new_lines)
 
@@ -262,6 +262,7 @@ class ExpandFunctionCallPass(Pass):
 
         func_names = func_name + seq
         funcline = functions[func_name]["func_content"]
+        keys = list(functions.keys())
 
         if len(funcline) == 0:
             return
@@ -275,21 +276,13 @@ class ExpandFunctionCallPass(Pass):
             new_line = line
             for lens in range(len(words)):
                 if re.match(r"\**CALL\**", words[lens]) and lens > 0:
-                    func = words[lens - 1].replace(" ", "").split('=', 1)
-                    variable = func[0]
-                    if (len(func) > 1):
-                        func = re.split('\+|\-|\*|\/|\^', func[1])
-                    else:
-                        func = re.split('\+|\-|\*|\/|\^', func[0])
-                    for i in range(len(func)):
-                        function = re.split(' |\(|\)|,', func[i])
-                        if len(function) > 0 and len(functions[function[0]]["func_content"]) > 0:
-                            func_name1 = function[0]
-                            new_seq = "_"  + str(call_num[func_name1])
+                    for key in keys:
+                        if len(functions[key]["func_content"]) > 0 and re.match(".*"+key+"\(.*", line) and key != "main":
+                            func_name1 = key
+                            new_seq = "_" + str(call_num[func_name1])
                             call_num[func_name1] += 1
-                            self.function_call(new_seq, func_name1, layer+1)
+                            self.function_call(new_seq, func_name1, layer + 1)
                             new_line = new_line.replace(func_name1 + "(", func_name1 + new_seq + "(")
-
             if id == 0:
                 new_line = line.replace(func_name + "(", func_names + "(")
                 FUNCTION_VAR[func_names].append(new_line)
@@ -309,8 +302,10 @@ class ExpandFunctionCallPass(Pass):
         funcpd = 0
         if "func_begin" not in functions:
             functions["func_begin"] = {}
+            functions["func_begin"]["func_content"] = []
         if "func_end" not in functions:
             functions["func_end"] = {}
+            functions["func_end"]["func_content"] = []
         for line in lines:
             if re.match(r"/\* Function Declarations \*/", line):
                 funcpd = 1
@@ -336,33 +331,18 @@ class ExpandFunctionCallPass(Pass):
         for id in range(len(lines)):
             line = lines[id]
             if re.match(r"/\**FUNC_BEGIN\**/", line):
-                functions["func_begin"]["line"] = line
+                if "line" not in functions["func_begin"]:
+                    functions["func_begin"]["line"] = line
                 funcpd = 1
                 line2 = lines[id+1]
                 head_func_name = line2.split(' ', 1)[1]
                 head_func_name = head_func_name.split('(', 1)[0]
             elif re.match(r"/\**FUNC_END\**/", line):
-                functions["func_end"]["line"] = line
+                if "line" not in functions["func_end"]:
+                    functions["func_end"]["line"] = line
                 funcpd = 2
             elif funcpd == 1:
                 functions[head_func_name]["func_content"].append(line)
-                words = re.split('/', line)
-                for lens in range(len(words)):
-                    if re.match(r"\**CALL\**", words[lens]) and lens > 0 and re.match(r".*printf.*", line) == None and re.match(r".*puts.*", line) == None:
-                        func = words[lens - 1].replace(" ","").split('=', 1)
-                        if(len(func) > 1):
-                            func = re.split('\+|\-|\*|\/|\^', func[1])
-                        else:
-                            func = re.split('\+|\-|\*|\/|\^', func[0])
-                        for i in range(len(func)):
-                            function = re.split(' |\(|\)|,', func[i])
-                            if len(function) > 0 and len(functions[function[0]]["func_content"]) > 0:
-                                func_name = function[0]
-                                if DG.has_edge(head_func_name, func_name):
-                                    num = DG[head_func_name][func_name]['num'] + 1
-                                    DG.add_edge(head_func_name, func_name, num=num)
-                                else:
-                                    DG.add_edge(head_func_name, func_name, num=1)
             elif funcpd == 0 or line != "\n":
                 OUTPUT.append(line)
 
@@ -374,6 +354,8 @@ class ExpandFunctionCallPass(Pass):
         call_num = self.call_num
 
         mainfunc_line = functions["main"]["func_content"]
+        keys = list(functions.keys())
+
         for key in functions.keys():
             call_num[key] = 1
         if "main" not in FUNCTION_VAR:
@@ -385,23 +367,16 @@ class ExpandFunctionCallPass(Pass):
             new_seq = ""
             func_name = ""
             new_line = line
+
             for lens in range(len(words)):
                 if re.match(r"\**CALL\**", words[lens]) and lens > 0:
-                    func = words[lens - 1].replace(" ", "").split('=', 1)
-                    variable = func[0]
-                    if (len(func) > 1):
-                        func = re.split('\+|\-|\*|\/|\^', func[1])
-                    else:
-                        func = re.split('\+|\-|\*|\/|\^', func[0])
-                    for i in range(len(func)):
-                        function = re.split(' |\(|\)|,', func[i])
-                        if len(function) > 0 and len(functions[function[0]]["func_content"]) > 0:
-                            func_name = function[0]
+                    for key in keys:
+                        if len(functions[key]["func_content"]) > 0 and re.match(".*"+key+"\(.*", line) and key != "main":
+                            func_name = key
                             new_seq = seq + str(call_num[func_name])
                             call_num[func_name] += 1
-                            self.function_call(new_seq, func_name, layer = 1)
-                            new_line = new_line.replace(func_name+"(", func_name + new_seq+"(")
-
+                            self.function_call(new_seq, func_name, layer=1)
+                            new_line = new_line.replace(func_name + "(", func_name + new_seq + "(")
             if func_name == "":
                 FUNCTION_VAR["main"].append(line)
             else:
