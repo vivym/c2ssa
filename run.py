@@ -274,7 +274,7 @@ class ExpandFunctionCallPass(Pass):
             func_name1 = ""
             new_line = line
             for lens in range(len(words)):
-                if re.match(r"\**CALL\**", words[lens]) and re.match(r".*printf.*", line) == None and re.match(r".*puts.*", line) == None and lens > 0:
+                if re.match(r"\**CALL\**", words[lens]) and lens > 0:
                     func = words[lens - 1].replace(" ", "").split('=', 1)
                     variable = func[0]
                     if (len(func) > 1):
@@ -307,6 +307,10 @@ class ExpandFunctionCallPass(Pass):
 
         DG = nx.DiGraph()
         funcpd = 0
+        if "func_begin" not in functions:
+            functions["func_begin"] = {}
+        if "func_end" not in functions:
+            functions["func_end"] = {}
         for line in lines:
             if re.match(r"/\* Function Declarations \*/", line):
                 funcpd = 1
@@ -326,17 +330,20 @@ class ExpandFunctionCallPass(Pass):
                         functions[func_name]["func_content"] = []
 
         keys = list(functions.keys())
+
         funcpd = 0
         head_func_name = ""
         for id in range(len(lines)):
             line = lines[id]
             if re.match(r"/\**FUNC_BEGIN\**/", line):
+                functions["func_begin"]["line"] = line
                 funcpd = 1
                 line2 = lines[id+1]
                 head_func_name = line2.split(' ', 1)[1]
                 head_func_name = head_func_name.split('(', 1)[0]
             elif re.match(r"/\**FUNC_END\**/", line):
-                funcpd = 0
+                functions["func_end"]["line"] = line
+                funcpd = 2
             elif funcpd == 1:
                 functions[head_func_name]["func_content"].append(line)
                 words = re.split('/', line)
@@ -356,7 +363,7 @@ class ExpandFunctionCallPass(Pass):
                                     DG.add_edge(head_func_name, func_name, num=num)
                                 else:
                                     DG.add_edge(head_func_name, func_name, num=1)
-            else:
+            elif funcpd == 0 or line != "\n":
                 OUTPUT.append(line)
 
     def work3(self, lines):
@@ -380,13 +387,6 @@ class ExpandFunctionCallPass(Pass):
             new_line = line
             for lens in range(len(words)):
                 if re.match(r"\**CALL\**", words[lens]) and lens > 0:
-                    if re.match(r".*printf.*", line) is not None:
-                        continue
-                    if re.match(r".*puts.*", line) is not None:
-                        continue
-                    if re.match(r".*scanf.*", line) is not None:
-                        continue
-
                     func = words[lens - 1].replace(" ", "").split('=', 1)
                     variable = func[0]
                     if (len(func) > 1):
@@ -395,7 +395,7 @@ class ExpandFunctionCallPass(Pass):
                         func = re.split('\+|\-|\*|\/|\^', func[0])
                     for i in range(len(func)):
                         function = re.split(' |\(|\)|,', func[i])
-                        if len(function) > 0:
+                        if len(function) > 0 and len(functions[function[0]]["func_content"]) > 0:
                             func_name = function[0]
                             new_seq = seq + str(call_num[func_name])
                             call_num[func_name] += 1
@@ -410,12 +410,12 @@ class ExpandFunctionCallPass(Pass):
         keys = list(FUNCTION_VAR.keys())
         lens = len(keys)
         for i in range(lens):
-            begin = "/************FUNC_BEGIN*****************/\n"
+            begin = functions["func_begin"]["line"] #"/************FUNC_BEGIN*****************/\n"
             OUTPUT.append(begin)
             key = keys[lens-i-1]
             for var in FUNCTION_VAR[key]:
                 OUTPUT.append(var)
-            end = "/************FUNC_END*****************/\n\n"
+            end = functions["func_end"]["line"] + "\n" #"/************FUNC_END*****************/\n"
             OUTPUT.append(end)
 
         return "\n".join(OUTPUT)
